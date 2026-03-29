@@ -310,14 +310,16 @@ void DanmuPool::setConnect(Pool *pool)
     reset();
     curPool->setUsed(true);
     beginResetModel();
-    danmuPool=curPool->comments();
+    danmuPool = curPool->comments();
+    danmuPool.removeIf([](const QSharedPointer<DanmuComment> &c){ return c->clipped; });
     setMerged();
     setStatisInfo();
     setAnalyzation();
     endResetModel();
     QObject::connect(curPool,&Pool::poolChanged,this,[this](bool ){
         beginResetModel();
-        danmuPool=curPool->comments();
+        danmuPool = curPool->comments();
+        danmuPool.removeIf([](const QSharedPointer<DanmuComment> &c){ return c->clipped; });
         setMerged();
         setAnalyzation();
         setStatisInfo();

@@ -394,10 +394,17 @@ QVariant DanmuManagerModel::data(const QModelIndex &index, int role) const
     case Qt::ToolTipRole:
     {
         if (col == Columns::TITLE)
+        {
+            if (item->type == DanmuPoolNode::SourecNode && !static_cast<DanmuPoolSourceNode *>(item)->valid)
+            {
+                return tr("(Danmu Source has expired)") + item->title;
+            }
             return item->title;
+        }
         else if (col == Columns::DELAY && item->type == DanmuPoolNode::SourecNode)
         {
-            if (static_cast<DanmuPoolSourceNode *>(item)->hasTimeline)
+            DanmuPoolSourceNode *srcNode = static_cast<DanmuPoolSourceNode *>(item);
+            if (srcNode->hasTimeline || srcNode->hasClip)
             {
                 return tr("Danmu Source with Timeline Adjustment");
             }
@@ -416,8 +423,16 @@ QVariant DanmuManagerModel::data(const QModelIndex &index, int role) const
         {
             if (static_cast<DanmuPoolSourceNode *>(item)->hasTimeline)
             {
-                static QIcon timeLineTip = GlobalObjects::context()->getFontIcon(QChar(0xe6b5), QColor(220, 220, 220));
+                static QIcon timeLineTip = GlobalObjects::context()->getFontIcon(QChar(0xe6b5), QColor(19, 165, 200));
                 return timeLineTip;
+            }
+        }
+        if (col == Columns::TITLE && item->type == DanmuPoolNode::SourecNode)
+        {
+            if (!static_cast<DanmuPoolSourceNode *>(item)->valid)
+            {
+                static QIcon invalidTip{":/res/images/notice.svg"};
+                return invalidTip;
             }
         }
         break;

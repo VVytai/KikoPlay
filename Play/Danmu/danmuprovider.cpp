@@ -96,6 +96,7 @@ ScriptState DanmuProvider::downloadDanmu(const DanmuSource *item, QVector<DanmuC
         DanmuSource *retItem = nullptr;
         ScriptState state = script->getDanmu(item, &retItem, danmuList);
         if(nItem) *nItem = retItem;
+        else if (retItem) delete retItem;
         return QVariant::fromValue(state);
     }).value<ScriptState>();
 }

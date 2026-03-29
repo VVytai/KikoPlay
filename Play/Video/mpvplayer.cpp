@@ -703,6 +703,16 @@ void MPVPlayer::setEmbeddedWindow(bool on)
 
 void MPVPlayer::initializeGL()
 {
+#ifdef Q_OS_LINUX
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 9, 0))
+    static bool inited = false;
+    if (!inited)
+    {
+        inited = true;
+        return;
+    }
+#endif
+#endif
     QOpenGLFunctions *glFuns=context()->functions();
     glFuns->initializeOpenGLFunctions();
     mpv_opengl_init_params gl_init_params{get_proc_address, nullptr};

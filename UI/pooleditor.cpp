@@ -10,6 +10,9 @@
 #include <QAction>
 #include <QApplication>
 #include <QStackedLayout>
+#include "Extension/Script/danmuscript.h"
+#include "Extension/Script/scriptmanager.h"
+#include "UI/widgets/ktagpanel.h"
 #include "widgets/danmusourcetip.h"
 #include "UI/ela/ElaCheckBox.h"
 #include "UI/ela/ElaMenu.h"
@@ -22,6 +25,7 @@
 #include "dialogs/timelineedit.h"
 #include "Common/notifier.h"
 #include "dialogs/danmuview.h"
+#include "dialogs/cliprangeedit.h"
 #include "UI/widgets/fonticonbutton.h"
 
 #define SETTING_KEY_EXPORT_DIALOG_PATH "FileDialogPath/PoolEditorExport"
@@ -232,7 +236,8 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
     setAttribute(Qt::WA_StyledBackground, true);
     setObjectName(QStringLiteral("PoolItem"));
 
-    DanmuSourceTip *srcTip = new DanmuSourceTip(sourceInfo, false, this);
+    KTagPanel *srcTags = new KTagPanel(this, 10);
+    initSrcTags(srcTags);
 
     ElidedLabel *name = new ElidedLabel(sourceInfo->title, this);
     name->setFont(QFont(GlobalObjects::normalFont,16));
@@ -244,7 +249,8 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
     QCheckBox *itemSwitch = new ElaCheckBox(tr("Show"), this);
     itemSwitch->setChecked(sourceInfo->show);
 
-    QLabel *danmuCountTip = new QLabel(this);
+    QPushButton *danmuCountTip = new QPushButton(this);
+    danmuCountTip->setObjectName(QStringLiteral("BgmFilterBtn"));
     danmuCountTip->setText(tr("Danmu Count: %1").arg(formatFixedDanmuCount(sourceInfo->count, danmuCountTip->fontMetrics())));
 
     FontIconButton *refreshBtn = new FontIconButton(QChar(0xe631), "", 13, 10, 0, this);
@@ -260,6 +266,10 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
     timelineBtn->setObjectName(QStringLiteral("FontIconToolButton"));
     timelineBtn->setContentsMargins(0, 0, 0, 0);
 
+    FontIconButton *clipBtn = new FontIconButton(QChar(0xe6ee), sourceInfo->hasClip() ? QString("%1-%2").arg(formatTime(sourceInfo->clipStart), formatTime((sourceInfo->clipStart + sourceInfo->clipDuration))) : "", 13, 10, 2, this);
+    clipBtn->setObjectName(QStringLiteral("FontIconToolButton"));
+    clipBtn->setContentsMargins(0, 0, 0, 0);
+
     FontIconButton *deleteButton= new FontIconButton(QChar(0xe60b), "", 13, 10, 0, this);
     deleteButton->setObjectName(QStringLiteral("FontIconCloseToolButton"));
     deleteButton->setContentsMargins(0, 0, 0, 0);
@@ -267,7 +277,7 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
 
     QHBoxLayout *nameHLayout = new QHBoxLayout();
     nameHLayout->setSpacing(4);
-    nameHLayout->addWidget(srcTip, 0, Qt::AlignVCenter);
+    nameHLayout->addWidget(srcTags, 0, Qt::AlignVCenter);
     nameHLayout->addWidget(name);
     nameHLayout->addWidget(deleteButton, 0, Qt::AlignVCenter);
 
@@ -279,6 +289,7 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
     opHLayout->addWidget(delayLabel);
     opHLayout->addWidget(delaySpinBox);
     opHLayout->addWidget(timelineBtn);
+    opHLayout->addWidget(clipBtn);
     opHLayout->addStretch(1);
     opHLayout->addWidget(itemSwitch);
 
@@ -317,10 +328,10 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
 
     QAction *viewDanmu=new QAction(tr("View Danmu"),this);
     QObject::connect(viewDanmu,&QAction::triggered,this,[sourceInfo](){
-        DanmuView view(&GlobalObjects::danmuPool->getPool()->comments(),editor, sourceInfo->id);
+        DanmuView view(&GlobalObjects::danmuPool->getPool()->comments(), editor, sourceInfo->id);
         view.exec();
     });
-    QObject::connect(srcTip, &DanmuSourceTip::clicked, viewDanmu, &QAction::trigger);
+    QObject::connect(danmuCountTip, &QPushButton::clicked, viewDanmu, &QAction::trigger);
     QAction *copyTimeline=new QAction(tr("Copy TimeLine Info"), this);
     QObject::connect(copyTimeline,&QAction::triggered,this,[sourceInfo](){
         if(sourceInfo->timelineInfo.empty()) return;
@@ -380,6 +391,19 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
         }
     });
 
+    QObject::connect(clipBtn, &QPushButton::clicked, this, [=](){
+        QVector<SimpleDanmuInfo> list;
+        GlobalObjects::danmuPool->getPool()->exportSimpleInfo(sourceInfo->id, list, false);
+        ClipRangeEdit clipEdit(sourceInfo, &list, this, GlobalObjects::mpvplayer->getDuration());
+        if (QDialog::Accepted == clipEdit.exec())
+        {
+            PoolSignalBlock block;
+            GlobalObjects::danmuPool->getPool()->setClip(sourceInfo->id, clipEdit.clipStart, clipEdit.clipDuration);
+            clipBtn->setText(sourceInfo->hasClip() ? QString("%1-%2").arg(formatTime(sourceInfo->clipStart), formatTime(sourceInfo->clipStart + sourceInfo->clipDuration)) : "");
+            danmuCountTip->setText(tr("Danmu Count: %1").arg(formatFixedDanmuCount(sourceInfo->count, danmuCountTip->fontMetrics())));
+        }
+    });
+
     QObject::connect(deleteButton, &QPushButton::clicked, this, [=](){
         PoolSignalBlock block;
         GlobalObjects::danmuPool->getPool()->deleteSource(sourceInfo->id);
@@ -396,11 +420,17 @@ PoolItem::PoolItem(const DanmuSource *sourceInfo, QWidget *parent) : QWidget(par
         this->parentWidget()->setEnabled(false);
         editor->showBusyState(true);
         PoolSignalBlock block;
-        int addCount = GlobalObjects::danmuPool->getPool()->update(sourceInfo->id);
+        bool srcChanged = false;
+        int addCount = GlobalObjects::danmuPool->getPool()->update(sourceInfo->id, nullptr, &srcChanged);
         if (addCount > 0)
         {
             editor->showMessage(tr("Add %1 New Danmu").arg(addCount));
             danmuCountTip->setText(tr("Danmu Count: %1").arg(formatFixedDanmuCount(sourceInfo->count, danmuCountTip->fontMetrics())));
+        }
+        if (srcChanged)
+        {
+            srcTags->clearTags();
+            initSrcTags(srcTags);
         }
         editor->showBusyState(false);
         this->parentWidget()->setEnabled(true);
@@ -428,6 +458,86 @@ QString PoolItem::formatFixedDanmuCount(int count, const QFontMetrics &fm)
         paddedStr = " " + paddedStr;
     }
     return paddedStr;
+}
+
+void PoolItem::initSrcTags(KTagPanel *tagPanel)
+{
+    auto curScript = GlobalObjects::scriptManager->getScript(src->scriptId).dynamicCast<DanmuScript>();
+    KTagPanel::TagItem mainTag;
+    mainTag.textColor = Qt::white;
+    mainTag.flag = DanmuSourceTag::FLAG_SCRIPT;
+    if (curScript)
+    {
+        mainTag.text = curScript->name();
+        mainTag.tooltip = src->url.isEmpty() ? src->scriptData : src->url;
+        mainTag.bgColor = curScript->labelColor();
+        if (!curScript->scriptIcon().isNull()) mainTag.icon = curScript->scriptIcon();
+    }
+    else
+    {
+        if (src->isKikoSource())
+        {
+            mainTag.text = "Kiko";
+            mainTag.tooltip = tr("KikoPlay Source");
+            mainTag.bgColor = QColor{ 19, 165, 200 };
+            mainTag.icon = QIcon(":/res/images/kikoplay.svg");
+        }
+        else
+        {
+            mainTag.text = tr("Local");
+            mainTag.tooltip = tr("Local Source");
+            mainTag.bgColor = QColor{ 43, 106, 176 };
+        }
+    }
+    if (src->duration > 0)
+    {
+        if (mainTag.icon.isNull())
+            mainTag.text += "|" + src->durationStr() ;
+        else
+            mainTag.text = src->durationStr();
+    }
+    if (!src->sourceValid)
+    {
+        auto &invalidTag = tagPanel->addTag("", tr("Danmu Source has expired"), QIcon(":/res/images/notice.svg"), Qt::transparent);
+        invalidTag.flag = DanmuSourceTag::FLAG_INVALID;
+    }
+    tagPanel->addTag(mainTag);
+
+    for (int i = 0; i < src->tags.size(); ++i)
+    {
+        auto &tag = src->tags[i];
+        KTagPanel::TagItem srcTag;
+        srcTag.text = tag.text;
+        srcTag.tooltip = tag.tooltip;
+        srcTag.bgColor = tag.bgColor == -1 ? mainTag.bgColor : tag.bgColor;
+        srcTag.textColor = tag.textColor == -1 ? mainTag.textColor : tag.textColor;
+        if (!tag.iconSVG.isEmpty())
+        {
+            srcTag.setIconFromSvgStr(tag.iconSVG);
+        }
+        srcTag.flag = DanmuSourceTag::FLAG_CUSTOM + i;
+        tagPanel->addTag(srcTag);
+    }
+
+    QObject::connect(tagPanel, &KTagPanel::tagClicked, this, [=](int index){
+        const auto &panelTag = tagPanel->tag(index);
+        int tagIndex = panelTag.flag;
+        if (tagIndex == DanmuSourceTag::FLAG_SCRIPT)
+        {
+            if (!src->url.isEmpty())
+            {
+                QDesktopServices::openUrl(QUrl(src->url));
+            }
+        }
+        else if (tagIndex >= DanmuSourceTag::FLAG_CUSTOM)
+        {
+            tagIndex -= DanmuSourceTag::FLAG_CUSTOM;
+            if (tagIndex < src->tags.size() && !src->tags[tagIndex].link.isEmpty())
+            {
+                QDesktopServices::openUrl(QUrl(src->tags[tagIndex].link));
+            }
+        }
+    });
 }
 
 bool PoolItem::eventFilter(QObject *watched, QEvent *event)

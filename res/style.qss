@@ -751,7 +751,7 @@ QSplitter#DownloadSpliter::handle {
 
 
 /* ------------------- LineEdit, TextEdit, PlainTextEdit SpinBox ------------------- */
-QDateEdit, QDateTimeEdit {
+QDateEdit, QDateTimeEdit, QTimeEdit {
     border: 1px solid #dddddd;
     border-radius: 2px;
     padding: 2px 2px 2px 2px;

@@ -94,6 +94,10 @@ CREATE TABLE "source" (
 "Delay"  INTEGER,
 "Duration"  INTEGER,
 "TimeLine"  TEXT,
+"Valid"  INTEGER,
+"Clip"   TEXT,
+"URL"    TEXT,
+"Tags"   TEXT,
 CONSTRAINT "PoolID" FOREIGN KEY ("PoolID") REFERENCES "pool" ("PoolID") ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX "PoolID_S"

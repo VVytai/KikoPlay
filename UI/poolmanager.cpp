@@ -17,6 +17,7 @@
 #include "Play/Playlist/playlistitem.h"
 #include "Play/Playlist/playlist.h"
 #include "Common/notifier.h"
+#include "UI/dialogs/cliprangeedit.h"
 #include "UI/ela/ElaCheckBox.h"
 #include "UI/ela/ElaLineEdit.h"
 #include "UI/ela/ElaMenu.h"
@@ -84,6 +85,27 @@ PoolManager::PoolManager(QWidget *parent) : CFramelessDialog(tr("Danmu Pool Mana
         }
 
     });
+
+    QAction *act_editClip = new QAction(tr("Edit Clip"), this);
+    QObject::connect(act_editClip, &QAction::triggered, this, [=](){
+        QModelIndexList indexList = poolView->selectionModel()->selectedRows();
+        if (indexList.empty()) return;
+        DanmuPoolSourceNode *srcNode=managerModel->getSourceNode(proxyModel->mapToSource(indexList.first()));
+        if (!srcNode) return;
+
+        Pool *pool = GlobalObjects::danmuManager->getPool(srcNode->parent->idInfo);
+        if (!pool) return;
+        QVector<SimpleDanmuInfo> list;
+        pool->exportSimpleInfo(srcNode->srcId, list, false);
+        DanmuSource srcInfo(pool->sources()[srcNode->srcId]);
+        ClipRangeEdit clipEdit(&srcInfo, &list, this);
+        if (QDialog::Accepted == clipEdit.exec())
+        {
+            pool->setClip(srcNode->srcId, clipEdit.clipStart, clipEdit.clipDuration);
+            srcNode->hasClip = srcInfo.hasClip();
+        }
+    });
+
     QAction *act_addWebSource=new QAction(tr("Add Web Source"),this);
     QObject::connect(act_addWebSource,&QAction::triggered,this,[this,stateLabel,managerModel,poolView,proxyModel](){
         QModelIndexList indexList = poolView->selectionModel()->selectedRows();
@@ -278,6 +300,7 @@ PoolManager::PoolManager(QWidget *parent) : CFramelessDialog(tr("Danmu Pool Mana
         actView->setEnabled(isPoolNode);
         act_addWebSource->setEnabled(isPoolNode);
         act_editTimeLine->setEnabled(isSourceNode);
+        act_editClip->setEnabled(isSourceNode);
         act_renamePool->setEnabled(isPoolNode);
         act_copyPoolCode->setEnabled(isPoolNode);
         act_pastePoolCode->setEnabled(isPoolNode);
@@ -287,7 +310,10 @@ PoolManager::PoolManager(QWidget *parent) : CFramelessDialog(tr("Danmu Pool Mana
 
     actionMenu->addAction(actView);
     actionMenu->addAction(act_addWebSource);
+    actionMenu->addSeparator();
+
     actionMenu->addAction(act_editTimeLine);
+    actionMenu->addAction(act_editClip);
     actionMenu->addSeparator();
 
     actionMenu->addAction(act_addPool);

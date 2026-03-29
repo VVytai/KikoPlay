@@ -3,6 +3,7 @@
 
 #include "UI/framelessdialog.h"
 #include "Play/Danmu/common.h"
+#include "UI/widgets/ktagpanel.h"
 
 class QLineEdit;
 class QComboBox;
@@ -12,6 +13,7 @@ struct PlayListItem;
 class AddDanmu;
 class ElaPivot;
 class ScriptSearchOptionPanel;
+class KTagPanel;
 struct SearchDanmuInfo
 {
     DanmuSource src;
@@ -46,11 +48,14 @@ signals:
 
 public:
     virtual QSize sizeHint() const;
+
 private:
     QList<SearchDanmuInfo> &_danmuList;
     int _index;
     const QStringList &_danmuPools;
     QComboBox *poolCombo;
+
+    void initSrcTags(KTagPanel *tagPanel, const DanmuSource &src);
 };
 
 class RelWordWidget : public QWidget

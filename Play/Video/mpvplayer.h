@@ -240,7 +240,7 @@ private:
     QStringList optionGroupKeys;
     QHash<QString, QMap<QString, QString>> optionsGroupMap;
 
-    int currentDuration;
+    int currentDuration; // s
     QVector<TrackInfo> audioTracks, subTracks;
     void loadTracks();
     void loadTracks(const QVariantList &allTracks);

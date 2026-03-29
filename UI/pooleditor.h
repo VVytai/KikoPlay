@@ -9,6 +9,7 @@ class QVBoxLayout;
 class QSpacerItem;
 class QStackedLayout;
 class QLabel;
+class KTagPanel;
 
 class PoolItem : public QWidget
 {
@@ -25,6 +26,8 @@ private:
     const DanmuSource *src;
     QLabel *pageSelectStatus;
     QString formatFixedDanmuCount(int count, const QFontMetrics& fm);
+    void initSrcTags(KTagPanel *tagPanel);
+
 signals:
     void selectStateChanged(bool on);
     // QObject interface

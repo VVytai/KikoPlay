@@ -11,6 +11,8 @@
 #include <QFile>
 #include <QDir>
 #include <QVariant>
+#include <QSvgRenderer>
+#include <QPainter>
 #include "Common/logger.h"
 #include "globalobjects.h"
 
@@ -314,6 +316,26 @@ QString ScriptBase::loadMeta(const QString &scriptPath)
         if(versionMismatch)
         {
             errInfo = QString("Script Version Mismatch, min: %1, cur: %2").arg(scriptMeta["min_kiko"], GlobalObjects::kikoVersion);
+        }
+    }
+    if (errInfo.isEmpty() && scriptMeta.contains("icon"))
+    {
+        const QString svgStr = scriptMeta["icon"];
+        if (!svgStr.isEmpty())
+        {
+            QSvgRenderer renderer(svgStr.toUtf8());
+            if (renderer.isValid())
+            {
+                QPixmap pixmap(64, 64);
+                pixmap.fill(Qt::transparent);
+
+                QPainter painter(&pixmap);
+                painter.setRenderHint(QPainter::Antialiasing);
+                renderer.render(&painter);
+                painter.end();
+
+                _scriptIcon = QIcon(pixmap);
+            }
         }
     }
     return errInfo;

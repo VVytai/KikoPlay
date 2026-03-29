@@ -67,5 +67,9 @@
         <file>res/translators.json</file>
         <file>res/block.xml</file>
         <file>res/tracker.xml</file>
+        <file>res/db/bangumi_update.sql</file>
+        <file>res/db/comment_update.sql</file>
+        <file>res/db/download_update.sql</file>
+        <file>res/images/notice.svg</file>
     </qresource>
 </RCC>

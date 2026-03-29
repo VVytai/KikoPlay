@@ -79,15 +79,12 @@ ScriptState DanmuScript::getDanmu(const DanmuSource *item, DanmuSource **nItem, 
     {
         *nItem = nullptr;
     }
-    else if(rets[0].type() == QVariant::Map)
+    else if(QMetaType::canConvert(rets[0].metaType(), QMetaType(QMetaType::QVariantMap)))
     {
         DanmuSource *nSrc = new DanmuSource;
         auto itemObj = rets[0].toMap();
         *nSrc = *item;
-        nSrc->title = itemObj.value("title").toString();
-        nSrc->desc = itemObj.value("desc").toString();
-        nSrc->scriptData = itemObj.value("data").toString();
-        nSrc->duration = itemObj.value("duration", 0).toInt();
+        parseDanmuSource(nSrc, itemObj);
         *nItem = nSrc;
     }
     auto dobjs = rets[1].toList();  //[{text=xx, time=xx(number, ms), <color=xx(int)>, <fontsize=xx(int, 1=normal, 2=small, 3=large)> <type=xx(int, 1=roll,2=top,3=bottom)>, <date=xx(str)>, <sender=xx>},....]
@@ -136,26 +133,53 @@ QString DanmuScript::callGetSources(const char *fname, const QVariant &param, bo
     QVariantList rets = call(fname, params, 1, errInfo);
     if(!errInfo.isEmpty()) return errInfo;
     QVariant ret = rets.first();  // array, [{title='', <desc>='', data='', <delay>=xx, <duration>=''},{}...]
-    if(ret.type() != QVariant::List) return "Wrong Return Value Type";
+    if (ret.typeId() != QMetaType::QVariantList) return "Wrong Return Value Type";
     QVariantList sourceList = ret.toList();
     results.clear();
     for(auto &item : sourceList)
     {
-        if(item.type() == QVariant::Map)
+        if (item.typeId() == QMetaType::QVariantMap)
         {
             auto itemObj = item.toMap();
-            QString title(itemObj.value("title").toString());
-            QString data(itemObj.value("data").toString());
-            if(title.isEmpty() || data.isEmpty()) continue;
             DanmuSource src;
-            src.title = title;
-            src.desc = itemObj.value("desc").toString();
-            src.scriptData = data;
-            src.scriptId = id();
-            src.delay = itemObj.value("delay", 0).toInt();
-            src.duration = itemObj.value("duration", 0).toInt();
-            results.append(src);
+            if (parseDanmuSource(&src, itemObj))
+            {
+                results.append(src);
+            }
         }
     }
     return errInfo;
+}
+
+bool DanmuScript::parseDanmuSource(DanmuSource *src, const QVariantMap &itemObj)
+{
+    QString title(itemObj.value("title").toString());
+    QString data(itemObj.value("data").toString());
+    if (title.isEmpty() || data.isEmpty()) return false;
+    src->title = title;
+    src->desc = itemObj.value("desc", src->desc).toString();
+    src->scriptData = data;
+    src->scriptId = id();
+    src->url = itemObj.value("url").toString();
+    src->delay = itemObj.value("delay", 0).toInt();
+    src->duration = itemObj.value("duration", 0).toInt();
+    src->sourceValid = itemObj.value("valid", true).toBool();
+    if (itemObj.value("tags").typeId() == QMetaType::QVariantList)
+    {
+        const QVariantList tagList = itemObj["tags"].toList();
+        src->tags.clear();
+        for (auto &tag : tagList)
+        {
+            if (QMetaType::canConvert(tag.metaType(), QMetaType(QMetaType::QVariantMap)))
+            {
+                DanmuSourceTag srcTag;
+                srcTag.fromMap(tag.toMap());
+                if (!srcTag.text.isEmpty())
+                {
+                    src->tags.append(srcTag);
+                }
+            }
+        }
+    }
+    return true;
 }

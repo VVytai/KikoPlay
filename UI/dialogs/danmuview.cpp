@@ -25,11 +25,18 @@ DanmuView::DanmuView(const QVector<DanmuComment *> *danmuList, QWidget *parent, 
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setSourceModel(model);
     danmuView->setModel(proxyModel);
-    tipLabel->setText(tr("Danmu Count: %1").arg(proxyModel->rowCount()));
-    QObject::connect(filterEdit,&DanmuFilterBox::filterChanged,[proxyModel,this](int type, const QString &keyword){
+
+    int validCount = 0;
+    for (auto comment : *danmuList)
+    {
+        if (!comment->clipped) validCount++;
+    }
+
+    tipLabel->setText(tr("Danmu Count: %1, Display Count: %2").arg(proxyModel->rowCount()).arg(validCount));
+    QObject::connect(filterEdit,&DanmuFilterBox::filterChanged,[proxyModel,validCount,this](int type, const QString &keyword){
         proxyModel->setFilterKeyColumn(type);
         proxyModel->setFilterFixedString(keyword);
-        tipLabel->setText(tr("Danmu Count: %1").arg(proxyModel->rowCount()));
+        tipLabel->setText(tr("Danmu Count: %1, Display Count: %2").arg(proxyModel->rowCount()).arg(validCount));
     });
 }
 
@@ -43,11 +50,18 @@ DanmuView::DanmuView(const QVector<QSharedPointer<DanmuComment> > *danmuList, QW
     proxyModel->setFilterKeyColumn(4);
     proxyModel->setSourceModel(model);
     danmuView->setModel(proxyModel);
-    tipLabel->setText(tr("Danmu Count: %1").arg(proxyModel->rowCount()));
-    QObject::connect(filterEdit,&DanmuFilterBox::filterChanged,[proxyModel,this](int type, const QString &keyword){
+
+    int validCount = 0;
+    for (auto comment : *danmuList)
+    {
+        if (!comment->clipped) validCount++;
+    }
+
+    tipLabel->setText(tr("Danmu Count: %1, Display Count: %2").arg(proxyModel->rowCount()).arg(validCount));
+    QObject::connect(filterEdit,&DanmuFilterBox::filterChanged,[proxyModel,validCount,this](int type, const QString &keyword){
         proxyModel->setFilterKeyColumn(type);
         proxyModel->setFilterFixedString(keyword);
-        tipLabel->setText(tr("Danmu Count: %1").arg(proxyModel->rowCount()));
+        tipLabel->setText(tr("Danmu Count: %1, Display Count: %2").arg(proxyModel->rowCount()).arg(validCount));
     });
 }
 

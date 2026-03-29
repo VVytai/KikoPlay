@@ -72,8 +72,8 @@ public:
     static QString normalFont;
     static void setFont(const QString &font);
 
-    static constexpr const char *kikoVersion = "2.0.0";
-    static constexpr const int kikoVersionNum = 200000;
+    static constexpr const char *kikoVersion = "2.1.0";
+    static constexpr const int kikoVersionNum = 200100;
 
 
     static void registerCustomSettingType();

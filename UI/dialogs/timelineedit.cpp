@@ -13,16 +13,7 @@
 #include <QVBoxLayout>
 #include "globalobjects.h"
 
-namespace
-{
-    QString formatTime(int mSec)
-    {
-        int cs=(mSec>=0?mSec:-mSec)/1000;
-        int cmin=cs/60;
-        int cls=cs-cmin*60;
-        return QString("%0%1:%2").arg(mSec<0?"-":"").arg(cmin,2,10,QChar('0')).arg(cls,2,10,QChar('0'));
-    }
-}
+
 TimelineEdit::TimelineEdit(const DanmuSource *source, const QVector<SimpleDanmuInfo> &simpleDanmuList, QWidget *parent, int curTime):
     CFramelessDialog(tr("Timeline Edit"),parent,true)
 {

@@ -4,7 +4,7 @@
 #include <QtGui>
 struct DanmuComment
 {
-    DanmuComment():time(0),originTime(0),blockBy(-1),mergedList(nullptr),m_parent(nullptr){}
+    DanmuComment():time(0),originTime(0),blockBy(-1),clipped(false),mergedList(nullptr),m_parent(nullptr){}
     ~DanmuComment(){if(mergedList)delete mergedList;}
     DanmuComment &operator=(const DanmuComment&) = delete;
     DanmuComment(const DanmuComment&) = delete;
@@ -32,6 +32,7 @@ struct DanmuComment
     int originTime;  // ms
     int blockBy;
     int source;
+    bool clipped;
 
     QVector<QSharedPointer<DanmuComment> > *mergedList;
     DanmuComment *m_parent;
@@ -120,6 +121,51 @@ struct DanmuEvent
     int duration;
     QString description;
 };
+
+struct DanmuSourceTag
+{
+    enum TagFlag
+    {
+        FLAG_INVALID,
+        FLAG_SCRIPT,
+        FLAG_COUNT,
+        FLAG_CUSTOM
+    };
+
+    QString text;
+    int textColor = -1;
+    int bgColor = -1;
+    QString tooltip;
+    QString iconSVG;
+    QString link;
+    // script data
+    QString key;
+    QString data;
+
+    void fromMap(const QVariantMap &map);
+
+    QVariantMap toMap() const
+    {
+        return {
+            {"text", text},
+            {"text_color", textColor},
+            {"bg_color", bgColor},
+            {"tooltip", tooltip},
+            {"icon_svg", iconSVG},
+            {"link", link},
+            {"key", key},
+            {"data", data},
+        };
+    }
+
+    bool operator==(const DanmuSourceTag& other) const
+    {
+        return this->text == other.text && this->textColor == other.textColor && this->bgColor == other.bgColor &&
+               this->tooltip == other.tooltip && this->iconSVG == other.iconSVG && this->link == other.link &&
+               this->key == other.key && this->data == other.data;
+    }
+};
+
 struct DanmuSource
 {
     // from script----
@@ -127,16 +173,28 @@ struct DanmuSource
     QString desc;
     QString scriptData;
     QString scriptId;
+    QString url;
+    bool sourceValid = true;
+    QVector<DanmuSourceTag> tags;
     //---------
     int id = -1;
     int delay = 0;  // ms
     int count = 0;
     int duration = 0;  // s
     bool show = true;
-
+    int clipStart = -1;  // ms
+    int clipDuration = 0;  // ms
     QVector<QPair<int,int>> timelineInfo;
+
     void setTimeline(const QString &timelineStr);
     QString timelineStr() const;
+    bool hasClip() const;
+    void setClip(const QString &clipStr);
+    void setClip(int start, int duration);
+    QString clipStr() const;
+    bool setTags(const QString &tagsJson);
+    QString tagsJson() const;
+
     bool isKikoSource() const;
 
     QVariantMap toMap() const
@@ -149,9 +207,13 @@ struct DanmuSource
             {"scriptId", scriptId},
             {"data", scriptData},
             {"scriptData", scriptData},
+            {"url", url},
+            {"valid", sourceValid},
             {"duration", duration},
             {"delay", delay},
             {"timeline", timelineStr()},
+            {"clip", clipStr()},
+            {"tags", packTags()},
         };
     }
     QString durationStr() const
@@ -160,9 +222,21 @@ struct DanmuSource
         int sec=duration-min*60;
         return QString("%1:%2").arg(min, 2, 10, QChar('0')).arg(sec, 2, 10, QChar('0'));
     }
+    QVariantList packTags() const
+    {
+        QVariantList tagList;
+        tagList.reserve(tags.size());
+        for (const auto &tag : tags)
+        {
+            tagList.append(tag.toMap());
+        }
+        return tagList;
+    }
 };
 QDataStream &operator<<(QDataStream &stream, const DanmuSource &src);
 QDataStream &operator>>(QDataStream &stream, DanmuSource &src);
 Q_DECLARE_OPAQUE_POINTER(DanmuSource *)
+
+QString formatTime(int mSec);
 
 #endif // DANMUCOMMENT_H

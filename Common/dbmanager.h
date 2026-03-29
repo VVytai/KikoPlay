@@ -36,6 +36,9 @@ private:
     const QStringList dbFiles{ "comment","bangumi","download" };
     QThreadStorage<QSharedPointer<DBConn>> dbManagers[DBType::UNKNOWN];
     QSqlDatabase openDBConn(DBType db);
+
+    void initDB(QSqlDatabase &db, DBType type);
+    void checkUpdateDB(QSqlDatabase &db, DBType type);
 };
 
 #endif // DBMANAGER_H

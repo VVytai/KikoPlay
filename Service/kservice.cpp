@@ -289,6 +289,7 @@ void KService::listenMatchDown(const EventParam *p)
         src->set_scriptid(scriptId.toStdString());
         src->set_scriptdata(scriptData.toStdString());
     }
+    if (matchEvent.matches_size() <= 0) return;
     std::string msgContent;
     matchEvent.SerializeToString(&msgContent);
     post(pathKMatchEvent, QByteArray(msgContent.c_str(), msgContent.size()));
@@ -571,7 +572,7 @@ void KService::kStatsUV(bool isStartup)
 void KService::kFileReco(const QString &path)
 {
     QFileInfo fi(path);
-    if (!fi.isFile() || !fi.exists())
+    if (!fi.isFile() || !fi.exists() || fi.size() < 1024*1024)
     {
         return;
     }

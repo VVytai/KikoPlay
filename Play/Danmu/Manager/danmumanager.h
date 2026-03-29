@@ -43,14 +43,18 @@ signals:
     void workerStateMessage(const QString &msg);
 private:
     void loadPool(Pool *pool);
-    void updatePool(Pool *pool, QVector<DanmuComment *> &outList, int sourceId=-1);
+    void updatePool(Pool *pool, QVector<DanmuComment *> &outList, QVector<DanmuSource *> &outSources, int sourceId=-1);
     QString getPoolId(const QString &animeTitle, EpType epType, double epIndex);
     void saveSource(const QString &pid, const DanmuSource *source, const QVector<QSharedPointer<DanmuComment> > &danmuList);
     void deleteSource(const QString &pid, int sourceId);
     void deleteDanmu(const QString &pid, const QSharedPointer<DanmuComment> danmu);
     void updateSourceTimeline(const QString &pid, const DanmuSource *sourceInfo);
     void updateSourceDelay(const QString &pid, const DanmuSource *sourceInfo);
-    QVector<DanmuComment *> updateSource(const DanmuSource *sourceInfo, const QSet<QString> &danmuHashSet);
+    void updateSourceClip(const QString &pid, const DanmuSource *sourceInfo);
+    void updateSourceTags(const QString &pid, const DanmuSource *sourceInfo);
+    void updateSourceValid(const QString &pid, const DanmuSource *sourceInfo);
+    void updateSourceScriptInfo(const QString &pid, const DanmuSource *sourceInfo);
+    QVector<DanmuComment *> updateSource(const DanmuSource *sourceInfo, const QSet<QString> &danmuHashSet, DanmuSource **nItem = nullptr);
 
 private:
     void loadAllPool();

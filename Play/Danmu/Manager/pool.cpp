@@ -67,37 +67,78 @@ bool Pool::clean()
     return true;
 }
 
-int Pool::update(int sourceId, QVector<QSharedPointer<DanmuComment> > *incList)
+int Pool::update(int sourceId, QVector<QSharedPointer<DanmuComment> > *incList, bool *srcChanged)
 {
-    if(sourcesTable.isEmpty()) return 0;
-    if(sourceId!=-1 && !sourcesTable.contains(sourceId)) return 0;
+    if (srcChanged) *srcChanged = false;
+    if (sourcesTable.isEmpty()) return 0;
+    if (sourceId!=-1 && !sourcesTable.contains(sourceId)) return 0;
     PoolStateLock locker;
-    if(!locker.tryLock(pid)) return 0;
+    if (!locker.tryLock(pid)) return 0;
     QVector<DanmuComment *> tList;
-    GlobalObjects::danmuManager->updatePool(this,tList,sourceId);
+    QVector<DanmuSource *> outSrcs;
+    GlobalObjects::danmuManager->updatePool(this, tList, outSrcs,sourceId);
     QVector<QSharedPointer<DanmuComment> > spList;
-    if(sourceId!=-1)
+    QMap<int,DanmuSource *> nSrcMap;
+    for (DanmuSource *src : outSrcs)
     {
-        sourcesTable[sourceId].count+=tList.count();
-        for(auto comment:tList)
+        if (src) nSrcMap[src->id] = src;
+    }
+    auto checkUpdateSource = [&](DanmuSource &oldSrc) -> bool{
+        if (pid.isEmpty() || !nSrcMap.contains(oldSrc.id)) return false;
+        DanmuSource *nSrc = nSrcMap[oldSrc.id];
+        bool changed = false;
+        if (oldSrc.sourceValid != nSrc->sourceValid)
+        {
+            oldSrc.sourceValid = nSrc->sourceValid;
+            GlobalObjects::danmuManager->updateSourceValid(pid, &oldSrc);
+            changed = true;
+        }
+        if (oldSrc.tags != nSrc->tags)
+        {
+            oldSrc.tags = nSrc->tags;
+            GlobalObjects::danmuManager->updateSourceTags(pid, &oldSrc);
+            changed = true;
+        }
+        if (oldSrc.title != nSrc->title || oldSrc.desc != nSrc->desc || oldSrc.scriptData != nSrc->scriptData || oldSrc.url != nSrc->url) {
+            oldSrc.title = nSrc->title;
+            oldSrc.desc = nSrc->desc;
+            oldSrc.scriptData = nSrc->scriptData;
+            oldSrc.url = nSrc->url;
+            GlobalObjects::danmuManager->updateSourceScriptInfo(pid, &oldSrc);
+            changed = true;
+        }
+        return changed;
+    };
+    bool sourceChanged = false;
+    if (sourceId != -1)
+    {
+        if (checkUpdateSource(sourcesTable[sourceId])) sourceChanged = true;
+        for (auto comment : tList)
         {
             QSharedPointer<DanmuComment> sp(comment);
             commentList.append(sp);
             spList.append(sp);
-            setDelay(comment);
+            setRealTime(comment);
+            if (!comment->clipped) sourcesTable[sourceId].count++;
         }
     }
     else
     {
-        for(auto &comment:tList)
+        for (auto &comment : tList)
         {
-            sourcesTable[comment->source].count++;
+            if (checkUpdateSource(sourcesTable[sourceId])) sourceChanged = true;
             QSharedPointer<DanmuComment> sp(comment);
             commentList.append(sp);
             spList.append(sp);
-            setDelay(comment);
+            setRealTime(comment);
+            if (!comment->clipped) sourcesTable[comment->source].count++;
         }
     }
+    for (DanmuSource *src : outSrcs)
+    {
+        if (src) delete src;
+    }
+    if (srcChanged) *srcChanged = sourceChanged;
     GlobalObjects::blocker->checkDanmu(tList.begin(), tList.end(), used);
     if(incList!=nullptr) *incList=spList;
     if(!pid.isEmpty()) GlobalObjects::danmuManager->saveSource(pid,nullptr,spList);
@@ -160,7 +201,8 @@ int Pool::addSource(const DanmuSource &sourceInfo, QVector<DanmuComment *> &danm
     for(DanmuComment *danmu:danmuList)
     {
         danmu->source=source->id;
-		setDelay(danmu);
+        setRealTime(danmu);
+        if (danmu->clipped) source->count--;
         QSharedPointer<DanmuComment> sp(danmu);
         commentList.append(sp);
         tmpList.append(sp);
@@ -219,7 +261,7 @@ bool Pool::setTimeline(int sourceId, const QVector<QPair<int, int>> &timelineInf
     for(auto iter=commentList.cbegin();iter!=commentList.cend();++iter)
     {
         DanmuComment *cur = (*iter).data();
-        if (cur->source == sourceId) setDelay(cur);
+        if (cur->source == sourceId) setRealTime(cur);
     }
     if(!pid.isEmpty()) GlobalObjects::danmuManager->updateSourceTimeline(pid,srcInfo);
     if(used)
@@ -241,12 +283,39 @@ bool Pool::setDelay(int sourceId, int delay)
     for(auto iter=commentList.cbegin();iter!=commentList.cend();++iter)
     {
         DanmuComment *cur = (*iter).data();
-        if (cur->source == sourceId) setDelay(cur);
+        if (cur->source == sourceId) setRealTime(cur);
     }
     if(!pid.isEmpty()) GlobalObjects::danmuManager->updateSourceDelay(pid,srcInfo);
     if(used)
     {
         std::sort(commentList.begin(),commentList.end(),DanmuSPCompare);
+        emit poolChanged(false);
+    }
+    return true;
+}
+
+bool Pool::setClip(int srcId, int start, int duration)
+{
+    if (!sourcesTable.contains(srcId)) return false;
+    DanmuSource *srcInfo =& sourcesTable[srcId];
+    if (srcInfo->clipStart == start && srcInfo->clipDuration == duration) return true;
+    PoolStateLock locker;
+    if(!locker.tryLock(pid)) return false;
+    srcInfo->setClip(start, duration);
+    int srcDanmuCount = 0;
+    for (auto &comment : commentList)
+    {
+        if (comment->source == srcId)
+        {
+            setRealTime(comment.data());
+            srcDanmuCount += comment->clipped ? 0 : 1;
+        }
+    }
+    srcInfo->count = srcDanmuCount;
+    if (!pid.isEmpty()) GlobalObjects::danmuManager->updateSourceClip(pid, srcInfo);
+    if (used)
+    {
+        std::sort(commentList.begin(), commentList.end(), DanmuSPCompare);
         emit poolChanged(false);
     }
     return true;
@@ -279,6 +348,7 @@ void Pool::exportPool(const QString &fileName, bool useTimeline, bool applyBlock
     {
         if(applyBlockRule && danmu->blockBy!=-1) continue;
         if(!ids.isEmpty() && !ids.contains(danmu->source)) continue;
+        if (useTimeline && danmu->clipped) continue;
         writer.writeStartElement("d");
         writer.writeAttribute("p", QString("%0,%1,%2,%3,%4,0,%5,0").arg(QString::number((useTimeline?danmu->time:danmu->originTime)/1000.0,'f',2))
                               .arg(type[danmu->type]).arg(fontSize[danmu->fontSizeLevel]).arg(danmu->color)
@@ -319,30 +389,34 @@ void Pool::exportKdFile(QDataStream &stream, const QList<int> &ids)
 		if (!ids.isEmpty() && !ids.contains(iter->id))iter = srcList.erase(iter);
 		else 
 		{
-			count += iter->count;
 			++iter;
 		}
 	}
     stream<<srcList;
+    for (const auto &danmu : commentList)
+    {
+        if (!ids.isEmpty() && !ids.contains(danmu->source)) continue;
+        ++count;
+    }
     stream<<count;
-	int i = 0;
     for(const auto &danmu:commentList)
     {
         if(!ids.isEmpty() && !ids.contains(danmu->source)) continue;
         stream<<*danmu;
-		++i;
     }
-	Q_ASSERT(i == count);
 }
 
-void Pool::exportSimpleInfo(int srcId, QVector<SimpleDanmuInfo> &simpleDanmuList)
+void Pool::exportSimpleInfo(int srcId, QVector<SimpleDanmuInfo> &simpleDanmuList, bool applyClip)
 {
-    for(const auto &danmu:commentList)
+    DanmuSource *srcInfo = &sourcesTable[srcId];
+    for(const auto &danmu : commentList)
     {
         if(danmu->source!=srcId) continue;
+        if (applyClip && danmu->clipped) continue;
         SimpleDanmuInfo sd;
         sd.text=danmu->text;
         sd.originTime=danmu->originTime;
+        if (applyClip && srcInfo->hasClip()) sd.originTime -= srcInfo->clipStart;
         sd.time=sd.originTime;
         simpleDanmuList.append(sd);
     }
@@ -372,7 +446,8 @@ QJsonObject Pool::exportFullJson()
             {"scriptId", source.scriptId},
             {"scriptName", scriptName},
             {"scriptData", source.scriptData},
-            {"timeline", source.timelineStr()}
+            {"timeline", source.timelineStr()},
+            {"clip", source.clipStr()},
         };
         sourceArray.append(sourceObj);
     }
@@ -395,7 +470,9 @@ QString Pool::getPoolCode(const QStringList &addition) const
     {
         QFileInfo fi(src.scriptData);
         if(fi.exists()) continue;
-        poolArray.append(QJsonArray({src.title,src.scriptId,src.scriptData,src.delay,src.timelineStr()}));
+        QJsonArray pA{src.title, src.scriptId, src.scriptData, src.delay, src.timelineStr()};
+        if (src.hasClip()) pA.append(src.clipStr());
+        poolArray.append(pA);
     }
     if(poolArray.isEmpty()) return QString();
     QByteArray compressedBytes;
@@ -466,7 +543,7 @@ QSet<QString> Pool::getDanmuHashSet(int sourceId)
 
 void Pool::addSourceJson(const QJsonArray &array)
 {
-    if(array.count()!=5) return;
+    if (array.count() < 5) return;
     DanmuSource srcInfo;
     srcInfo.title=array[0].toString();
     srcInfo.scriptId = array[1].toString();
@@ -474,19 +551,36 @@ void Pool::addSourceJson(const QJsonArray &array)
     srcInfo.delay=array[3].toInt();
     srcInfo.count=0;
     srcInfo.setTimeline(array[4].toString());
+    if (array.size() > 5) srcInfo.setClip(array[5].toString());
     QVector<DanmuComment *> emptyList;
     addSource(srcInfo,emptyList);
 }
 
-void Pool::setDelay(DanmuComment *danmu)
+void Pool::setRealTime(DanmuComment *danmu)
 {
-    auto srcInfo=&sourcesTable[danmu->source];
-    int delay=0;
-    for(auto &spaceItem:srcInfo->timelineInfo)
+    danmu->clipped = false;
+    auto srcInfo = &sourcesTable[danmu->source];
+    int delay = 0;
+    int originTime = danmu->originTime;
+    if (srcInfo->hasClip())
     {
-        if(danmu->originTime>spaceItem.first)delay+=spaceItem.second;
+        if (originTime < srcInfo->clipStart || originTime > srcInfo->clipStart + srcInfo->clipDuration)
+        {
+            danmu->clipped = true;
+            return;
+        }
+        originTime -= srcInfo->clipStart;
+    }
+    for (auto &spaceItem : srcInfo->timelineInfo)
+    {
+        if (originTime > spaceItem.first) delay += spaceItem.second;
         else break;
     }
-    delay+=srcInfo->delay;
-    danmu->time=danmu->originTime+delay<0?danmu->originTime:danmu->originTime+delay;
+    delay += srcInfo->delay;
+    if (originTime + delay < 0)
+    {
+        danmu->clipped = true;
+        return;
+    }
+    danmu->time = originTime + delay;
 }

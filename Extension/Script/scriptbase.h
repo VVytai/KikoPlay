@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QHash>
 #include <QMutex>
+#include <QIcon>
 #include "Extension/Lua/lua.hpp"
 class MutexLocker
 {
@@ -74,6 +75,7 @@ public:
     const QVector<ScriptSettingItem> &settings() const {return scriptSettings;}
     const QVector<SearchSettingItem> &searchSettings() const {return searchSettingItems;}
     const QVector<QPair<QString, QString>> &getScriptMenuItems() const {return scriptMenuItems;}
+    const QIcon &scriptIcon() const { return _scriptIcon; }
     virtual ScriptState setOption(int index, const QString &value, bool callLua=true);
     virtual ScriptState setOption(const QString &key, const QString &value, bool callLua=true);
     virtual ScriptState setSearchOption(const QString &key, const QString &value);
@@ -81,6 +83,7 @@ public:
     virtual QString name() const {return scriptMeta.value("name");}
     virtual QString desc() const {return scriptMeta.value("desc");}
     virtual QString version() const {return scriptMeta.value("version");}
+    virtual QString svgIcon() const { return scriptMeta.value("icon"); }
     virtual QString getValue(const QString &key) const {return scriptMeta.value(key);}
     virtual ScriptType type() const {return sType;}
     ScriptState scriptMenuClick(const QString &mid);
@@ -105,6 +108,7 @@ protected:
     bool settingsUpdated, hasSetOptionFunc;
     QString settingPath;
     ScriptType sType;
+    QIcon _scriptIcon;
 
     QVariantList call(const char *fname, const QVariantList &params, int nRet, QString &errInfo, bool retUseString = true);
     QVariant get(const char *name);

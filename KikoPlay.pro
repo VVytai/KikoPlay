@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui sql network concurrent websockets xml webenginewidgets openglwidgets opengl
+QT       += core gui sql network concurrent websockets xml webenginewidgets openglwidgets opengl svg
 linux:QT += dbus
 #win32:QT += winextras
 
@@ -137,6 +137,7 @@ SOURCES += \
     UI/animeepisodeeditor.cpp \
     UI/dialogs/adddanmu.cpp \
     UI/dialogs/blockeditor.cpp \
+    UI/dialogs/cliprangeedit.cpp \
     UI/dialogs/danmuview.cpp \
     UI/dialogs/mpvconfediror.cpp \
     UI/dialogs/selectepisodedialog.cpp \
@@ -212,12 +213,14 @@ SOURCES += \
     UI/widgets/colorpreview.cpp \
     UI/widgets/component/flowlayout.cpp \
     UI/widgets/component/ktreeviewitemdelegate.cpp \
+    UI/widgets/danmurangeselector.cpp \
     UI/widgets/danmusourcetip.cpp \
     UI/widgets/elidedlabel.cpp \
     UI/widgets/floatscrollbar.cpp \
     UI/widgets/klineedit.cpp \
     UI/widgets/kplaintextedit.cpp \
     UI/widgets/kpushbutton.cpp \
+    UI/widgets/ktagpanel.cpp \
     UI/widgets/lazycontainer.cpp \
     UI/widgets/optionmenu.cpp \
     UI/widgets/windowtip.cpp \
@@ -443,6 +446,7 @@ HEADERS += \
     UI/animeepisodeeditor.h \
     UI/dialogs/adddanmu.h \
     UI/dialogs/blockeditor.h \
+    UI/dialogs/cliprangeedit.h \
     UI/dialogs/danmuview.h \
     UI/dialogs/mpvconfediror.h \
     UI/dialogs/selectepisodedialog.h \
@@ -522,12 +526,14 @@ HEADERS += \
     UI/widgets/colorpreview.h \
     UI/widgets/component/flowlayout.h \
     UI/widgets/component/ktreeviewitemdelegate.h \
+    UI/widgets/danmurangeselector.h \
     UI/widgets/danmusourcetip.h \
     UI/widgets/elidedlabel.h \
     UI/widgets/floatscrollbar.h \
     UI/widgets/klineedit.h \
     UI/widgets/kplaintextedit.h \
     UI/widgets/kpushbutton.h \
+    UI/widgets/ktagpanel.h \
     UI/widgets/lazycontainer.h \
     UI/widgets/optionmenu.h \
     UI/widgets/windowtip.h \

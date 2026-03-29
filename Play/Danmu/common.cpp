@@ -171,6 +171,34 @@ QString DanmuSource::timelineStr() const
     return timelineStr;
 }
 
+bool DanmuSource::hasClip() const
+{
+    return clipStart >= 0 && clipDuration > 0;
+}
+
+void DanmuSource::setClip(const QString &clipStr)
+{
+    if (clipStr.isEmpty()) return;
+    const QStringList clipInfo = clipStr.split(':', Qt::SkipEmptyParts);
+    if (clipInfo.size() == 2)
+    {
+        clipStart = clipInfo[0].toInt();
+        clipDuration = clipInfo[1].toInt();
+    }
+}
+
+void DanmuSource::setClip(int start, int duration)
+{
+    clipStart = start;
+    clipDuration = duration;
+}
+
+QString DanmuSource::clipStr() const
+{
+    if (!hasClip()) return "";
+    return QString("%1:%2").arg(clipStart).arg(clipDuration);
+}
+
 bool DanmuSource::isKikoSource() const
 {
 #ifdef KSERVICE
@@ -179,15 +207,84 @@ bool DanmuSource::isKikoSource() const
     return false;
 }
 
+bool DanmuSource::setTags(const QString &tagsJson)
+{
+    if (tagsJson.isEmpty()) return false;
+    QJsonParseError jsonError;
+    QJsonDocument document = QJsonDocument::fromJson(tagsJson.toUtf8(), &jsonError);
+    if (jsonError.error != QJsonParseError::NoError || !document.isArray())
+    {
+        return false;
+    }
+    QJsonArray tagArray = document.array();
+    tags.clear();
+    for (const auto &tagObj : tagArray)
+    {
+        if (tagObj.isObject())
+        {
+            DanmuSourceTag tag;
+            tag.fromMap(tagObj.toObject().toVariantMap());
+            tags.append(tag);
+        }
+    }
+    return true;
+}
+
+QString DanmuSource::tagsJson() const
+{
+    if (tags.isEmpty()) return "";
+    return QJsonDocument::fromVariant(packTags()).toJson(QJsonDocument::JsonFormat::Compact);
+}
+
 QDataStream &operator<<(QDataStream &stream, const DanmuSource &src)
 {
-    return stream<<src.title<<src.desc<<src.scriptId<<src.scriptData<<src.id<<src.duration<<src.delay<<src.timelineStr();
+    return stream << src.title
+                  << src.desc
+                  << src.scriptId
+                  << src.scriptData
+                  << src.id
+                  << src.duration
+                  << src.delay
+                  << src.timelineStr()
+                  << src.clipStr()
+                  << src.tagsJson();
 }
 
 QDataStream &operator>>(QDataStream &stream, DanmuSource &src)
 {
-    QString timeline;
-    stream>>src.title>>src.desc>>src.scriptId>>src.scriptData>>src.id>>src.duration>>src.delay>>timeline;
-    if(!timeline.isEmpty()) src.setTimeline(timeline);
+    QString timeline, clip, tagJson;
+    stream >> src.title
+           >> src.desc
+           >> src.scriptId
+           >> src.scriptData
+           >> src.id
+           >> src.duration
+           >> src.delay
+           >> timeline
+           >> clip
+           >> tagJson;
+    if (!timeline.isEmpty()) src.setTimeline(timeline);
+    if (!clip.isEmpty()) src.setClip(clip);
+    if (!tagJson.isEmpty()) src.setTags(tagJson);
     return stream;
+}
+
+void DanmuSourceTag::fromMap(const QVariantMap &map)
+{
+    text = map.value("text").toString();
+    textColor = map.value("text_color", -1).toInt();
+    bgColor = map.value("bg_color", -1).toInt();
+    tooltip = map.value("tooltip").toString();
+    iconSVG = map.value("icon_svg").toString();
+    link = map.value("link").toString();
+    key = map.value("key").toString();
+    data = map.value("data").toString();
+}
+
+QString formatTime(int mSec)
+{
+    int cs = (mSec >= 0 ? mSec : -mSec) / 1000;
+    int cmin = cs/60;
+    int cls = cs - cmin*60;
+    return QString("%0%1:%2").arg(mSec < 0 ? "-" : "").arg(cmin, 2, 10,QChar('0')).arg(cls, 2, 10,QChar('0'));
 }

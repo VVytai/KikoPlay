@@ -31,8 +31,9 @@
 #include "danmuview.h"
 #include "Play/Danmu/blocker.h"
 #include "Extension/Script/scriptmanager.h"
+#include "Extension/Script/danmuscript.h"
 #include "UI/widgets/scriptsearchoptionpanel.h"
-#include "UI/widgets/danmusourcetip.h"
+#include "UI/widgets/ktagpanel.h"
 #include "globalobjects.h"
 #include "Common/notifier.h"
 namespace
@@ -424,7 +425,7 @@ QWidget *AddDanmu::setupSelectedPage()
                 DanmuItemWidget *itemWidget = new DanmuItemWidget(danmuInfoList, danmuInfoList.size() - 1, danmuPools);
                 QListWidgetItem *listItem = new QListWidgetItem(selectedDanmuView);
                 selectedDanmuView->setItemWidget(listItem, itemWidget);
-                listItem->setSizeHint(itemWidget->sizeHint());
+                //listItem->setSizeHint(itemWidget->sizeHint());
                 QObject::connect(itemWidget, &DanmuItemWidget::setPoolIndexFrom, this, [=](int poolIndex){
                     int row = selectedDanmuView->row(listItem);
                     setPoolIdInSequence(row, poolIndex);
@@ -601,16 +602,16 @@ DanmuItemWidget::DanmuItemWidget(QList<SearchDanmuInfo> &danmuList, int index, c
     titleLabel->setFont(QFont(GlobalObjects::normalFont, 14));
     titleLabel->setFontColor(QColor(240, 240, 240));
     titleLabel->setToolTip(info.src.title);
-    DanmuSourceTip *srcTip = new DanmuSourceTip(&info.src, true, this);
+    KTagPanel *srcTags = new KTagPanel(this, 10);
     QHBoxLayout *titleHLayout = new QHBoxLayout;
     titleHLayout->setContentsMargins(0, 0, 0, 0);
     titleHLayout->setSpacing(4);
-    titleHLayout->addWidget(srcTip);
+    titleHLayout->addWidget(srcTags, 0, Qt::AlignLeft | Qt::AlignVCenter);
     titleHLayout->addWidget(titleLabel);
-    QObject::connect(srcTip, &DanmuSourceTip::clicked, this, [=](){
-        DanmuView view(&_danmuList[index].danmus, this);
-        view.exec();
-    });
+    titleLabel->setMinimumWidth(20);
+
+    initSrcTags(srcTags, info.src);
+
 
     poolCombo = new ElaComboBox(this);
     poolCombo->setMaximumWidth(260);
@@ -653,6 +654,7 @@ DanmuItemWidget::DanmuItemWidget(QList<SearchDanmuInfo> &danmuList, int index, c
     });
 
     QGridLayout *itemGLayout=new QGridLayout(this);
+    itemGLayout->setContentsMargins(8, 0, 8, 0);
     itemGLayout->addWidget(srcCheck, 0, 0);
     itemGLayout->addItem(titleHLayout, 0, 1);
     itemGLayout->addItem(poolHLayout, 0, 2);
@@ -673,3 +675,87 @@ QSize DanmuItemWidget::sizeHint() const
 {
     return layout()->sizeHint();
 }
+
+void DanmuItemWidget::initSrcTags(KTagPanel *tagPanel, const DanmuSource &src)
+{
+    auto curScript = GlobalObjects::scriptManager->getScript(src.scriptId).dynamicCast<DanmuScript>();
+    KTagPanel::TagItem mainTag;
+    mainTag.textColor = Qt::white;
+    mainTag.flag = DanmuSourceTag::FLAG_SCRIPT;
+    if (curScript)
+    {
+        mainTag.text = curScript->name();
+        mainTag.tooltip = src.url.isEmpty() ? curScript->name() : src.url;
+        mainTag.bgColor = curScript->labelColor();
+        if (!curScript->scriptIcon().isNull()) mainTag.icon = curScript->scriptIcon();
+    }
+    else
+    {
+        if (src.isKikoSource())
+        {
+            mainTag.text = "Kiko";
+            mainTag.tooltip = tr("KikoPlay Source");
+            mainTag.bgColor = QColor{ 19, 165, 200 };
+            mainTag.icon = QIcon(":/res/images/kikoplay.svg");
+        }
+        else
+        {
+            mainTag.text = tr("Local");
+            mainTag.tooltip = tr("Local Source");
+            mainTag.bgColor = QColor{ 43, 106, 176 };
+        }
+    }
+    if (src.duration > 0)
+    {
+        if (mainTag.icon.isNull())
+            mainTag.text += "|" + src.durationStr() ;
+        else
+            mainTag.text = src.durationStr();
+    }
+    tagPanel->addTag(mainTag);
+    auto& countTag = tagPanel->addTag(QString::number(src.count), tr("%1 danmus").arg(src.count), QIcon(), mainTag.bgColor);
+    countTag.flag = DanmuSourceTag::FLAG_COUNT;
+
+    for (int i = 0; i < src.tags.size(); ++i)
+    {
+        auto &tag = src.tags[i];
+        KTagPanel::TagItem srcTag;
+        srcTag.text = tag.text;
+        srcTag.tooltip = tag.tooltip;
+        srcTag.bgColor = tag.bgColor == -1 ? mainTag.bgColor : tag.bgColor;
+        srcTag.textColor = tag.textColor == -1 ? mainTag.textColor : tag.textColor;
+        if (!tag.iconSVG.isEmpty())
+        {
+            srcTag.setIconFromSvgStr(tag.iconSVG);
+        }
+        srcTag.flag = DanmuSourceTag::FLAG_CUSTOM + i;
+        tagPanel->addTag(srcTag);
+    }
+
+    QObject::connect(tagPanel, &KTagPanel::tagClicked, this, [=](int index){
+        const DanmuSource &src = _danmuList[_index].src;
+        const auto &panelTag = tagPanel->tag(index);
+        int tagIndex = panelTag.flag;
+        if (tagIndex == DanmuSourceTag::FLAG_SCRIPT)
+        {
+            if (!src.url.isEmpty())
+            {
+                QDesktopServices::openUrl(QUrl(src.url));
+            }
+        }
+        else if (tagIndex == DanmuSourceTag::FLAG_COUNT)
+        {
+            DanmuView view(&_danmuList[_index].danmus, this);
+            view.exec();
+        }
+        else if (tagIndex >= DanmuSourceTag::FLAG_CUSTOM)
+        {
+            tagIndex -= DanmuSourceTag::FLAG_CUSTOM;
+            if (tagIndex < src.tags.size() && !src.tags[tagIndex].link.isEmpty())
+            {
+                QDesktopServices::openUrl(QUrl(src.tags[tagIndex].link));
+            }
+        }
+    });
+}
+
