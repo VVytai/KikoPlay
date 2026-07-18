@@ -1,5 +1,6 @@
 #include "UI/mainwindow.h"
 #include <QApplication>
+#include <QStyleFactory>
 #include <QMessageBox>
 #include <QLocalSocket>
 #include <QLocalServer>
@@ -113,6 +114,11 @@ int main(int argc, char *argv[])
     QApplication a(argc, argv);
     a.setApplicationName("KikoPlay");
     a.setWindowIcon(QIcon(":/res/images/app.png"));
+#ifdef Q_OS_MAC
+    // macOS 默认使用原生 QMacStyle，会忽略 QSS 的 border-radius 等盒模型属性，
+    // 导致按钮/输入框显示为直角。改用 Fusion 样式以完整支持 QSS 圆角，与其它平台一致。
+    a.setStyle(QStyleFactory::create("Fusion"));
+#endif
 #ifdef Q_OS_WIN
     SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER)AppCrashHandler);
 #endif

@@ -162,3 +162,133 @@ jobs:
           kikoplay-${{ matrix.arch }}-full.AppImage
         draft: false
         prerelease: false
+
+  build-macos:
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Install system dependencies
+      run: |
+        brew update
+        brew install mpv lua onnxruntime aria2 create-dmg
+
+    - name: Build protobuf 3.21.8 (static lite) for KService
+      run: |
+        # The pre-generated Service/pb/service.pb.{cc,h} are produced by
+        # protoc 3.21.8 and require a matching libprotobuf. Homebrew ships a
+        # much newer, incompatible protobuf, so build 3.21.8 from source and
+        # install it into a local prefix. A static libprotobuf-lite.a is used
+        # so the resulting .app needs no extra dylib.
+        PB_PREFIX="$HOME/protobuf-3.21.8"
+        curl -L -o protobuf-cpp-3.21.8.tar.gz \
+          https://github.com/protocolbuffers/protobuf/releases/download/v21.8/protobuf-cpp-3.21.8.tar.gz
+        tar -xzf protobuf-cpp-3.21.8.tar.gz
+        cd protobuf-3.21.8
+        ./configure --prefix="$PB_PREFIX" --disable-shared --enable-static
+        make -j$(sysctl -n hw.ncpu)
+        make install
+        echo "KIKO_PROTOBUF_PREFIX=$PB_PREFIX" >> "$GITHUB_ENV"
+
+    - name: Setup Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: ${{ env.QT_VERSION }}
+        arch: clang_64
+        target: 'desktop'
+        modules: 'qtpositioning qtwebchannel qtwebengine qtwebsockets'
+
+    - name: Create secrets header
+      run: |
+        cat > Common/secrets.h << 'EOF'
+        #undef APP_ID_KIKO
+        #undef APP_SECRET_KIKO
+        #undef APP_ID_DANDAN
+        #undef APP_SECRET_DANDAN
+
+        #define APP_ID_KIKO "${{ secrets.APP_ID_KIKO_MAC }}"
+        #define APP_SECRET_KIKO "${{ secrets.APP_SECRET_KIKO_MAC }}"
+        #define APP_ID_DANDAN "${{ secrets.APP_ID_DANDAN }}"
+        #define APP_SECRET_DANDAN "${{ secrets.APP_SECRET_DANDAN }}"
+        EOF
+
+    - name: Generate app icon (icns)
+      run: |
+        ICONSET=kikoplay.iconset
+        mkdir -p "$ICONSET"
+        for size in 16 32 64 128 256 512; do
+          sips -z $size $size kikoplay.png --out "$ICONSET/icon_${size}x${size}.png"
+          double=$((size * 2))
+          sips -z $double $double kikoplay.png --out "$ICONSET/icon_${size}x${size}@2x.png"
+        done
+        iconutil -c icns "$ICONSET" -o kikoplay.icns
+        rm -rf "$ICONSET"
+
+    - name: Build main application
+      run: |
+        qmake6 build.pro
+        make -j$(sysctl -n hw.ncpu)
+
+    - name: Bundle resources and dependencies
+      run: |
+        APP="KikoPlay.app"
+        # Bundle Qt frameworks, plugins and third-party dylibs
+        macdeployqt "$APP" -verbose=1
+
+        # KikoPlay looks for the web assets next to the executable
+        cp -R web "$APP/Contents/MacOS/web"
+
+        # Ship aria2c so the download feature works out of the box
+        cp "$(brew --prefix aria2)/bin/aria2c" "$APP/Contents/MacOS/aria2c"
+
+        # macdeployqt rewrites library paths with install_name_tool, which
+        # invalidates the existing code signatures. On Apple Silicon an
+        # invalid signature makes the kernel SIGKILL the process
+        # (CODESIGNING, Code 2 Invalid Page). Re-sign the whole bundle with an
+        # ad-hoc signature after all modifications are done.
+        codesign --force --deep --sign - --timestamp=none "$APP/Contents/MacOS/aria2c"
+        codesign --force --deep --sign - --timestamp=none "$APP"
+        codesign --verify --deep --verbose=2 "$APP"
+
+    - name: Create DMG
+      run: |
+        # Get version from git tag or use default
+        if [ -n "${{ github.ref_name }}" ] && echo "${{ github.ref_name }}" | grep -q '^[0-9]'; then
+            VERSION="${{ github.ref_name }}"
+        else
+            VERSION="2.0.0"
+        fi
+
+        mkdir -p dmg-src
+        cp -R KikoPlay.app dmg-src/
+
+        create-dmg \
+          --volname "KikoPlay ${VERSION}" \
+          --icon "KikoPlay.app" 150 190 \
+          --app-drop-link 450 190 \
+          --window-size 600 400 \
+          --no-internet-enable \
+          "kikoplay-macos-arm64.dmg" \
+          "dmg-src" || \
+        create-dmg \
+          --volname "KikoPlay ${VERSION}" \
+          "kikoplay-macos-arm64.dmg" \
+          "dmg-src"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kikoplay-macos-arm64
+        path: |
+          kikoplay-macos-arm64.dmg
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          kikoplay-macos-arm64.dmg
+        draft: false
+        prerelease: false

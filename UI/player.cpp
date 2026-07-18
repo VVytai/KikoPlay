@@ -13,6 +13,7 @@
 #include <QButtonGroup>
 #include <QListView>
 #include <QLineEdit>
+#include <QDir>
 
 #include "Play/Danmu/Manager/danmumanager.h"
 #include "UI/dialogs/mpvconfediror.h"
@@ -353,7 +354,11 @@ void PlayerWindow::initActions()
 
     actScreenshotSrc = new QAction(tr("Original Video"), this);
     QObject::connect(actScreenshotSrc, &QAction::triggered, this, [=](){
+#ifdef Q_OS_MAC
+        QTemporaryFile tmpImg(QDir::tempPath() + "/kikoXXXXXX.jpg");
+#else
         QTemporaryFile tmpImg("XXXXXX.jpg");
+#endif
         if (tmpImg.open())
         {
             GlobalObjects::mpvplayer->screenshot(tmpImg.fileName());
@@ -2900,7 +2905,13 @@ void PlayerWindow::keyPressEvent(QKeyEvent *event)
                 int cmin=curTime/60;
                 int cls=curTime-cmin*60;
                 QString info=QString("%1:%2 - %3").arg(cmin,2,10,QChar('0')).arg(cls,2,10,QChar('0')).arg(curItem->title);
+#ifdef Q_OS_MAC
+                // mac 下 .app 启动时 cwd 通常为 /，相对路径模板会创建失败，
+                // 显式指定系统临时目录。
+                QTemporaryFile tmpImg(QDir::tempPath() + "/kikoXXXXXX.jpg");
+#else
                 QTemporaryFile tmpImg("XXXXXX.jpg");
+#endif
                 if(tmpImg.open())
                 {
                     GlobalObjects::mpvplayer->screenshot(tmpImg.fileName());
@@ -3132,10 +3143,41 @@ void unsetAwakeRequired()
     sendInhabitMessage(false);
 }
 
+#elif defined(Q_OS_MAC)
+
+// macOS：使用 IOKit 的电源管理断言阻止显示器休眠与系统睡眠
+
+#include <IOKit/pwr_mgt/IOPMLib.h>
+
+namespace
+{
+IOPMAssertionID assertionID = 0;
+}
+
+void setAwakeRequired()
+{
+    if (assertionID != 0)
+    {
+        return;
+    }
+    CFStringRef reason = CFSTR("KikoPlay is playing video");
+    IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep,
+                                kIOPMAssertionLevelOn, reason, &assertionID);
+}
+
+void unsetAwakeRequired()
+{
+    if (assertionID == 0)
+    {
+        return;
+    }
+    IOPMAssertionRelease(assertionID);
+    assertionID = 0;
+}
+
 #else
 
 // Empty stub function for unknown OS
-// TODO: implement for Mac
 
 void setAwakeRequired() {}
 void unsetAwakeRequired() {}

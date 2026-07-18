@@ -5,6 +5,7 @@
 #include "Common/threadtask.h"
 #include "globalobjects.h"
 #include "Common/notifier.h"
+#include "Common/logger.h"
 
 AppManager::AppManager(QObject *parent)
     : QAbstractItemModel{parent}
@@ -223,6 +224,7 @@ QVector<QSharedPointer<Extension::KApp>> AppManager::refresApp()
         appIdMap.insert(app->id());
     }
     const QString appRootPath(getAppPath());
+    Logger::logger()->log(Logger::Extension, QString("App Path: %1").arg(appRootPath));
     QDir folder(appRootPath);
     QVector<QSharedPointer<Extension::KApp>> newAppList;
     const QFileInfoList infoList = folder.entryInfoList();

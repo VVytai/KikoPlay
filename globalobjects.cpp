@@ -28,6 +28,7 @@
 #include <QSqlError>
 #include <QFileInfo> 
 #include <QElapsedTimer>
+#include <QSurfaceFormat>
 
 MPVPlayer *GlobalObjects::mpvplayer=nullptr;
 DanmuPool *GlobalObjects::danmuPool=nullptr;
@@ -59,7 +60,26 @@ void GlobalObjects::init(QElapsedTimer *elapsedTimer)
     Network::applyProxySetting();
     Logger::logger();
 
+#ifdef Q_OS_MAC
+    // macOS 兼容 profile 上限仅 OpenGL 2.1，无法使用 sampler2D 数组做弹幕批量渲染。
+    // 开启该选项后请求 4.1 Core Profile 以启用高效弹幕渲染路径（需重启生效）。
+    // 必须在创建 MPVPlayer（QOpenGLWidget）之前设置默认 QSurfaceFormat，否则不生效。
+    if (appSetting->value("Play/MacCoreProfile", true).toBool())
+    {
+        QSurfaceFormat fmt = QSurfaceFormat::defaultFormat();
+        fmt.setRenderableType(QSurfaceFormat::OpenGL);
+        fmt.setProfile(QSurfaceFormat::CoreProfile);
+        fmt.setVersion(4, 1);
+        QSurfaceFormat::setDefaultFormat(fmt);
+    }
+#endif
+
+#ifdef Q_OS_MAC
+    // macOS 无微软雅黑，使用系统内置的苹方（PingFang SC，10.11+ 内置）作为中文 UI 默认字体。
+    normalFont = appSetting->value("UI/Font", "PingFang SC").toString();
+#else
     normalFont = appSetting->value("UI/Font", "Microsoft YaHei UI").toString();
+#endif
 
     QThread::currentThread()->setObjectName(QStringLiteral("mainThread"));
     workThread = new QThread();
@@ -134,6 +154,9 @@ void GlobalObjects::init(QElapsedTimer *elapsedTimer)
 
     QFont font = qApp->font();
     font.setPixelSize(13);
+#ifdef Q_OS_MAC
+    font.setPixelSize(16);
+#endif
     font.setFamily(normalFont);
     font.setHintingPreference(QFont::PreferNoHinting);
     qApp->setFont(font);

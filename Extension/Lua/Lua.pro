@@ -83,3 +83,7 @@ win32 {
 linux-g++* {
     QMAKE_CFLAGS_RELEASE += -DLUA_USE_LINUX -DLUA_COMPAT_5_2
 }
+
+macx {
+    QMAKE_CFLAGS += -DLUA_USE_MACOSX -DLUA_COMPAT_5_2
+}

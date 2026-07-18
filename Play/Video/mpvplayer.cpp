@@ -96,6 +96,33 @@ const char *fShaderDanmu_Old =
         "    gl_FragColor.rgba = texture2D(u_SamplerD, v_vTexCoord).bgra;\n"
         "    gl_FragColor.a *= alpha;\n"
 "}\n";
+// macOS Core Profile 专用（GLSL 410）：兼容 profile 上限仅 2.1，
+// 想用 sampler2D 数组做弹幕批量渲染必须切 Core Profile，而 Core 只接受现代语法。
+const char *vShaderDanmu_Core =
+        "#version 410 core\n"
+        "in vec4 a_VtxCoord;\n"
+        "in vec2 a_TexCoord;\n"
+        "in float a_Tex;\n"
+        "out vec2 v_vTexCoord;\n"
+        "out float texId;\n"
+        "void main(void)\n"
+        "{\n"
+        "    gl_Position = a_VtxCoord;\n"
+        "    v_vTexCoord = a_TexCoord;\n"
+        "    texId = a_Tex;\n"
+        "}\n";
+const char *fShaderDanmu_Core =
+        "#version 410 core\n"
+        "in vec2 v_vTexCoord;\n"
+        "in float texId;\n"
+        "uniform sampler2D u_SamplerD[16];\n"
+        "uniform float alpha;\n"
+        "out vec4 fragColor;\n"
+        "void main(void)\n"
+        "{\n"
+        "    fragColor.rgba = texture(u_SamplerD[int(texId)], v_vTexCoord).bgra;\n"
+        "    fragColor.a *= alpha;\n"
+        "}\n";
 #ifdef Q_OS_WIN
 #pragma comment (lib,"user32.lib")
 #pragma comment (lib,"gdi32.lib")
@@ -821,8 +848,9 @@ void MPVPlayer::initializeGL()
     }
     else
     {
-        danmuShader.addShaderFromSourceCode(QOpenGLShader::Vertex, vShaderDanmu);
-        danmuShader.addShaderFromSourceCode(QOpenGLShader::Fragment, fShaderDanmu);
+        const bool coreProfile = context()->format().profile() == QSurfaceFormat::CoreProfile;
+        danmuShader.addShaderFromSourceCode(QOpenGLShader::Vertex, coreProfile ? vShaderDanmu_Core : vShaderDanmu);
+        danmuShader.addShaderFromSourceCode(QOpenGLShader::Fragment, coreProfile ? fShaderDanmu_Core : fShaderDanmu);
         danmuShader.bindAttributeLocation("a_VtxCoord", 0);
         danmuShader.bindAttributeLocation("a_TexCoord", 1);
         danmuShader.bindAttributeLocation("a_Tex", 2);

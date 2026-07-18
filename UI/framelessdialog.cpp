@@ -11,6 +11,9 @@
 #include <QHBoxLayout>
 #include "globalobjects.h"
 #include "Play/Video/mpvplayer.h"
+#ifdef Q_OS_MAC
+#include "macwindowhelper.h"
+#endif
 
 Q_TAKEOVER_NATIVEEVENT_CPP(CFramelessDialog, elaAppBar);
 
@@ -93,6 +96,20 @@ void CFramelessDialog::resizeEvent(QResizeEvent *event)
     }
 }
 
+void CFramelessDialog::showEvent(QShowEvent *event)
+{
+    QDialog::showEvent(event);
+#ifdef Q_OS_MAC
+    // ElaAppBar 使用无边框窗口，macOS 不会自动裁切圆角，
+    // 首次显示、原生窗口已创建后为其应用圆角与阴影。
+    if (!roundedCornersApplied)
+    {
+        roundedCornersApplied = true;
+        MacWindowHelper::applyRoundedCorners(this);
+    }
+#endif
+}
+
 void CFramelessDialog::showBusyState(bool busy)
 {
     isBusy = busy;
@@ -130,6 +147,5 @@ void CFramelessDialog::addOnCloseCallback(const std::function<void ()> &func)
 {
     onCloseCallback.append(func);
 }
-
 
 

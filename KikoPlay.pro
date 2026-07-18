@@ -24,6 +24,14 @@ DEFINES += QT_MESSAGELOGCONTEXT
 DEFINES += QT_DEPRECATED_WARNINGS
 DEFINES += ZLIB_WINAPI
 DEFINES += KSERVICE
+# KService relies on protobuf. On macOS protobuf is not linked by default, so
+# KService is only enabled when a protobuf 3.21.x install prefix is provided
+# through the KIKO_PROTOBUF_PREFIX environment variable (see the CI workflow).
+# Local macOS builds without that variable keep KService disabled.
+macx {
+    KIKO_PROTOBUF_PREFIX = $$(KIKO_PROTOBUF_PREFIX)
+    isEmpty(KIKO_PROTOBUF_PREFIX): DEFINES -= KSERVICE
+}
 # You can also make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
@@ -743,8 +751,35 @@ win32 {
 
 # UNIX related settings
 macx {
-    LIBS += -L/usr/lib -L/usr/local/lib -L/opt/local/lib -L$$PWD/lib/mac
-    LIBS += -llua5.3
+    INCLUDEPATH += Play/Subtitle/onnxruntime
+
+    OBJECTIVE_SOURCES += UI/macwindowhelper.mm
+    HEADERS += UI/macwindowhelper.h
+    LIBS += -framework AppKit -framework Cocoa -framework QuartzCore -framework IOKit
+
+    # Homebrew (Apple Silicon default prefix)
+    LIBS += -L/usr/lib -L/usr/local/lib -L/opt/local/lib -L/opt/homebrew/lib -L$$PWD/lib/mac
+    # Built-in Lua static library (see Extension/Lua)
+    LIBS += -LExtension/Lua -llua53
+    LIBS += -lonnxruntime
+
+    # Link protobuf-lite (3.21.x) for KService. service.proto uses
+    # "optimize_for = LITE_RUNTIME", so the generated code only needs
+    # libprotobuf-lite. The prefix comes from the KIKO_PROTOBUF_PREFIX
+    # environment variable, and we reference the static libprotobuf-lite.a by
+    # its absolute path instead of "-L.. -lprotobuf-lite": the Homebrew path
+    # (/opt/homebrew/lib) is searched earlier and ships a much newer,
+    # incompatible protobuf dylib that would otherwise be picked up, producing
+    # undefined-symbol errors against the 3.21.8 service.pb.cc. The static lite
+    # library needs no extra dylib in the .app bundle.
+    contains(DEFINES, KSERVICE) {
+        KIKO_PROTOBUF_PREFIX = $$(KIKO_PROTOBUF_PREFIX)
+        INCLUDEPATH += $$KIKO_PROTOBUF_PREFIX/include
+        LIBS += $$KIKO_PROTOBUF_PREFIX/lib/libprotobuf-lite.a
+    }
+
+    ICON = kikoplay.icns
+    QMAKE_INFO_PLIST = Info.plist
 }
 
 linux-g++* {
@@ -765,20 +800,24 @@ linux-g++* {
 }
 
 unix {
-    # Install settings
-    target.path += /usr/bin
-    unix:desktop.path = /usr/share/applications
-    unix:desktop.files = io.github.KikoPlayProject.KikoPlay.desktop
-    unix:icons.path = /usr/share/icons/hicolor/128x128/apps
-    unix:icons.files = io.github.KikoPlayProject.KikoPlay.png
-    unix:metainfo.path = /usr/share/metainfo
-    unix:metainfo.files = io.github.KikoPlayProject.KikoPlay.metainfo.xml
-    unix:web.path = /usr/share/kikoplay/web
-    unix:web.files = web/*
-
-    INSTALLS += target desktop icons metainfo web
     DEFINES += CONFIG_UNIX_DATA
 
     LIBS += -lmpv
     LIBS += -lz
+}
+
+# Linux install layout (not applicable to the macOS .app bundle)
+unix:!macx {
+    # Install settings
+    target.path += /usr/bin
+    desktop.path = /usr/share/applications
+    desktop.files = io.github.KikoPlayProject.KikoPlay.desktop
+    icons.path = /usr/share/icons/hicolor/128x128/apps
+    icons.files = io.github.KikoPlayProject.KikoPlay.png
+    metainfo.path = /usr/share/metainfo
+    metainfo.files = io.github.KikoPlayProject.KikoPlay.metainfo.xml
+    web.path = /usr/share/kikoplay/web
+    web.files = web/*
+
+    INSTALLS += target desktop icons metainfo web
 }

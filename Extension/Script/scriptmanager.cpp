@@ -14,6 +14,8 @@ ScriptManager::ScriptManager(QObject *parent) : QObject(parent)
     qRegisterMetaType<ScriptType>("ScriptType");
     qRegisterMetaType<ScriptState>("ScriptState");
     qRegisterMetaType<ScriptManager::ScriptChangeState>("ScriptChangeState");
+
+    Logger::logger()->log(Logger::Script, QString("Script Path: %1").arg(getScriptPath()));
     refreshScripts(ScriptType::DANMU);
     refreshScripts(ScriptType::MATCH);
     refreshScripts(ScriptType::LIBRARY);

@@ -8,6 +8,7 @@
 #include <QLineEdit>
 #include <QMetaObject>
 #include <QPropertyAnimation>
+#include <QScreen>
 #include <QVector>
 
 #include "DeveloperComponents/ElaComboBoxStyle.h"
@@ -154,6 +155,31 @@ void ElaComboBox::showPopup()
                 view()->scrollTo(currentModelIndex, QAbstractItemView::EnsureVisible);
             }
             container->move(container->x(), container->y() + 3);
+#ifdef Q_OS_MAC
+            // mac 下条目较多时，Qt 会为了让当前项对齐组合框而把弹窗整体上移，
+            // 导致弹窗“飞”到屏幕顶部。这里强制将弹窗定位到组合框正下方，
+            // 若下方空间不足则放到上方，并钳制在屏幕可用区域内。
+            {
+                QPoint belowLeft = mapToGlobal(QPoint(0, height()));
+                int popupHeight = containerHeight;
+                QScreen* screen = this->screen();
+                QRect available = screen ? screen->availableGeometry() : QRect();
+                int targetX = belowLeft.x();
+                int targetY = belowLeft.y() + 3;
+                if (available.isValid())
+                {
+                    // 下方放不下且上方更宽裕时，改到组合框上方
+                    if (targetY + popupHeight > available.bottom() &&
+                        mapToGlobal(QPoint(0, 0)).y() - popupHeight >= available.top())
+                    {
+                        targetY = mapToGlobal(QPoint(0, 0)).y() - popupHeight - 3;
+                    }
+                    targetX = qBound(available.left(), targetX, available.right() - container->width());
+                    targetY = qBound(available.top(), targetY, available.bottom() - popupHeight);
+                }
+                container->move(targetX, targetY);
+            }
+#endif
             QLayout* layout = container->layout();
             while (layout->count())
             {

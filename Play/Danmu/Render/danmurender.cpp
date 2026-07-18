@@ -70,7 +70,12 @@ DanmuRender::DanmuRender(QObject *parent) : QObject(parent)
     fontSizeTable[1] = fontSizeTable[0] / 1.5;
     fontSizeTable[2] = fontSizeTable[0] * 1.5;
     danmuStyle.fontSizeTable = fontSizeTable;
+#ifdef Q_OS_MAC
+    // macOS 无微软雅黑，弹幕默认使用系统内置的苹方（PingFang SC）。
+    danmuStyle.fontFamily = GlobalObjects::appSetting->value(SETTING_KEY_DANMU_FONT, "PingFang SC").toString();
+#else
     danmuStyle.fontFamily = GlobalObjects::appSetting->value(SETTING_KEY_DANMU_FONT, "Microsoft YaHei").toString();
+#endif
     danmuStyle.randomSize = GlobalObjects::appSetting->value(SETTING_KEY_DANMU_RANDOM_SIZE, false).toBool();
     danmuStyle.randomColor = GlobalObjects::appSetting->value(SETTING_KEY_DANMU_RANDOM_COLOR, false).toBool();
     danmuStyle.strokeWidth = GlobalObjects::appSetting->value(SETTING_KEY_DANMU_STROKE, 35).toInt() / 10.f;
@@ -406,5 +411,4 @@ void DanmuRender::addDanmu(QVector<DrawTask> *newDanmu)
     }
     GlobalObjects::danmuPool->recyclePrepareList(newDanmu);
 }
-
 

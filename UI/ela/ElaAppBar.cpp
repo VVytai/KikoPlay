@@ -695,6 +695,13 @@ bool ElaAppBar::eventFilter(QObject* obj, QEvent* event)
         return true;
     }
 #ifndef Q_OS_WIN
+    case QEvent::WindowStateChange:
+    {
+        // 非 Windows 下窗口最大化/还原（双击标题栏、系统按钮、快捷键等
+        // 任意途径）统一在此更新最大化按钮图标。
+        d->_changeMaxButtonAwesome(window()->isMaximized());
+        break;
+    }
     case QEvent::MouseButtonPress:
     {
         if (d->_edges != 0)

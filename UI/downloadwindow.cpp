@@ -315,7 +315,8 @@ QWidget *DownloadWindow::initDownloadPage()
     sortBtn->setContentsMargins(2, 2, 2, 2);
 
     KLineEdit *searchEdit = new KLineEdit(downloadContainer);
-    searchEdit->setFont(QFont(GlobalObjects::normalFont, 12));
+    searchEdit->setFont(QFont(GlobalObjects::normalFont, 14));
+    searchEdit->setMinimumHeight(30);
     searchEdit->setObjectName(QStringLiteral("DownloadSearchEdit"));
     searchEdit->setPlaceholderText(tr("Search Task"));
     searchEdit->setMinimumWidth(180);
@@ -1104,4 +1105,3 @@ void BlockWidget::resizeEvent(QResizeEvent *)
     int dh = rowCount*sh;
     setMinimumHeight(dh+marginY);
 }
-

@@ -32,6 +32,7 @@ private:
 
     bool isBusy;
     bool isPin;
+    bool roundedCornersApplied = false;
 
     int storeW, storeH;
 

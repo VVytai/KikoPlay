@@ -6,6 +6,9 @@
 #include <QPushButton>
 #include "UI/widgets/dialogtip.h"
 #include "UI/widgets/loadingicon.h"
+#ifdef Q_OS_MAC
+#include "UI/macwindowhelper.h"
+#endif
 
 Q_TAKEOVER_NATIVEEVENT_CPP(AppFramelessDialog, elaAppBar);
 
@@ -102,6 +105,13 @@ void AppFramelessDialog::showEvent(QShowEvent *event)
         resize(w, h);
     }
     QDialog::showEvent(event);
+#ifdef Q_OS_MAC
+    if (!roundedCornersApplied)
+    {
+        roundedCornersApplied = true;
+        MacWindowHelper::applyRoundedCorners(this);
+    }
+#endif
 }
 
 
@@ -141,7 +151,6 @@ void AppFramelessDialog::setHideCallback(const std::function<bool ()> &func)
 {
     onHideCallback = func;
 }
-
 
 
 

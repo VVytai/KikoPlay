@@ -121,22 +121,27 @@ void LibraryWindow::initUI()
 QLayout *LibraryWindow::initLibrarayBtns(QWidget *parent)
 {
     const int btnMinWidth = 90;
+    const int btnMinHeight = 30;
     FontIconButton *filterBtn = new FontIconButton(QChar(0xe634), tr("Filter"), 12, 10, 4, parent);
     filterBtn->setMinimumWidth(btnMinWidth);
+    filterBtn->setMinimumHeight(btnMinHeight);
     filterBtn->setObjectName(QStringLiteral("LibraryButton"));
     filterBtn->setContentsMargins(4, 2, 4, 2);
     filterBtn->setCheckable(true);
     this->filterCheckBtn = filterBtn;
     FontIconButton *addBtn = new FontIconButton(QChar(0xec18), tr("Add"), 12, 10, 4, parent);
     addBtn->setMinimumWidth(btnMinWidth);
+    addBtn->setMinimumHeight(btnMinHeight);
     addBtn->setObjectName(QStringLiteral("LibraryButton"));
     addBtn->setContentsMargins(4, 2, 4, 2);
     FontIconButton *sortBtn = new FontIconButton(QChar(0xe69d), tr("Sort By Add Time ") + QChar(0x2193), 12, 10, 4, parent);
     sortBtn->setMinimumWidth(btnMinWidth);
+    sortBtn->setMinimumHeight(btnMinHeight);
     sortBtn->setObjectName(QStringLiteral("LibraryButton"));
     sortBtn->setContentsMargins(4, 2, 4, 2);
     FontIconButton *batchBtn = new FontIconButton(QChar(0xe8ac), tr("Batch Operation"), 12, 10, 4, parent);
     batchBtn->setMinimumWidth(btnMinWidth);
+    batchBtn->setMinimumHeight(btnMinHeight);
     batchBtn->setObjectName(QStringLiteral("LibraryButton"));
     batchBtn->setContentsMargins(4, 2, 4, 2);
 
@@ -239,7 +244,7 @@ QLayout *LibraryWindow::initLibrarayBtns(QWidget *parent)
 
     AnimeFilterBox *filterBox = new AnimeFilterBox(parent);
     filterBox->setFixedWidth(130);
-    filterBox->setFixedHeight(filterBtn->sizeHint().height());
+    filterBox->setMinimumHeight(30);
     QObject::connect(filterBox, &AnimeFilterBox::filterChanged, this, [=](int type, const QString &str){
         proxyModel->setFilter(type, str);
     });
@@ -649,7 +654,7 @@ AnimeFilterBox::AnimeFilterBox(QWidget *parent)
 {
     setObjectName(QStringLiteral("FilterEdit"));
     setClearButtonEnabled(true);
-    setFont(QFont(GlobalObjects::normalFont, 13));
+    setFont(QFont(GlobalObjects::normalFont, 14));
 
     QMenu *menu = new ElaMenu(this);
 

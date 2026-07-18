@@ -26,6 +26,12 @@ ElaMenu::ElaMenu(QWidget* parent)
     setObjectName("ElaMenu");
     d->_menuStyle = new ElaMenuStyle(style());
     setStyle(d->_menuStyle);
+#ifdef Q_OS_MAC
+    // mac 下全局字体为 16px，用于菜单偏大，这里单独调小为 15px
+    QFont menuFont = font();
+    menuFont.setPixelSize(15);
+    setFont(menuFont);
+#endif
     d->_pAnimationImagePosY = 0;
     d->_isSubMenu = dynamic_cast<QMenu*>(parent) != nullptr;
 
