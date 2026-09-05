@@ -200,7 +200,7 @@ void AddDanmu::search()
     endProcess();
 }
 
-int AddDanmu::addSearchItem(QList<DanmuSource> &sources)
+int AddDanmu::addSearchItem(QList<DanmuSource> &sources, TaskContext *ctx)
 {
     if(sources.empty()) return 0;
     ScriptState retState(ScriptState::S_NORM);
@@ -209,7 +209,7 @@ int AddDanmu::addSearchItem(QList<DanmuSource> &sources)
         SearchDanmuInfo danmuInfo;
         danmuInfo.pool = defaultPool;
         DanmuSource *nSrc = nullptr;
-        auto ret = GlobalObjects::danmuProvider->downloadDanmu(&src, danmuInfo.danmus, &nSrc);
+        auto ret = GlobalObjects::danmuProvider->downloadDanmu(&src, danmuInfo.danmus, &nSrc, ctx);
         if (ret)
         {
             int srcCount = danmuInfo.danmus.count();
@@ -285,7 +285,8 @@ void AddDanmu::addURL()
         }
         else
         {
-            if (addSearchItem(results) > 0) ++addNum;
+            if (ctx.isCancelRequested()) break;
+            if (addSearchItem(results, &ctx) > 0) ++addNum;
         }
     }
     showMessage(tr("Add %1 URL(s)").arg(addNum), NM_HIDE);

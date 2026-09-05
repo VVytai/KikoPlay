@@ -117,46 +117,47 @@ int AppNet::request(lua_State *L)
         break;
     }
 
-    lua_pushstring(L, RequestData::selfKey); // table key
     reply->setParent(nullptr);
-    RequestData *dt = new RequestData(reply, 0);
+    RequestData *dt = new RequestData(reply);
     dt->push(L);
-    lua_rawset(L, -3); //table
-    dt->reqInfoRef = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    // Keep the request table as the userdata's uservalue. Unlike a registry
+    // reference, this relationship is visible to Lua's garbage collector.
+    lua_pushvalue(L, 1);  // table_req, dt, table_req
+    lua_setuservalue(L, -2);  // table_req, dt
+    lua_pushstring(L, RequestData::selfKey);  // table_req, dt, key
+    lua_pushvalue(L, -2);  // table_req, dt, key, dt
+    lua_rawset(L, 1);  // table_req, dt
+    lua_pushvalue(L, -1);
+    dt->selfRef = luaL_ref(L, LUA_REGISTRYINDEX);
 
     QObject::connect(reply, &QNetworkReply::finished, [dt, L](){
+        LuaStackGuard stackGuard(L);
         const char *func = dt->reply->error() == QNetworkReply::NoError? "success" : "error";
-        lua_rawgeti(L, LUA_REGISTRYINDEX, dt->reqInfoRef);
-        lua_pushstring(L, func);  // t fname
-        if (lua_gettable(L, -2) == LUA_TFUNCTION)
+        if (lua_checkstack(L, 4) && pushLuaUserdataCallback(L, dt->selfRef, func))
         {
-            dt->pushFromRef(L);
-            if (lua_pcall(L, 1, 0, 0))
+            if (dt->pushFromRef(L) && lua_pcall(L, 1, 0, 0))
             {
                 Logger::logger()->log(Logger::Extension, "[request]" + QString(lua_tostring(L, -1)));
             }
         }
-        lua_pop(L, 1);
+        dt->releaseRef(L);
     });
     if (reqInfo.contains("progress"))
     {
         QObject::connect(reply, &QNetworkReply::downloadProgress, [dt, L](qint64 recv, qint64 total){
-            lua_rawgeti(L, LUA_REGISTRYINDEX, dt->reqInfoRef);
-            lua_pushstring(L, "progress");  // t fname
-            if (lua_gettable(L, -2) == LUA_TFUNCTION)
+            LuaStackGuard stackGuard(L);
+            if (lua_checkstack(L, 6) && pushLuaUserdataCallback(L, dt->selfRef, "progress"))
             {
                 lua_pushinteger(L, recv);
                 lua_pushinteger(L, total);
-                dt->pushFromRef(L);
-                if (lua_pcall(L, 3, 0, 0))
+                if (dt->pushFromRef(L) && lua_pcall(L, 3, 0, 0))
                 {
                     Logger::logger()->log(Logger::Extension, "[request]progress: " + QString(lua_tostring(L, -1)));
                 }
             }
-            lua_pop(L, 1);
         });
     }
-    dt->pushFromRef(L);
     lua_pushnil(L);
     return 2;
 }
@@ -171,62 +172,57 @@ int AppNet::websocket(lua_State *L)
     }
     QVariantMap reqInfo = getValue(L, false, 2).toMap();
 
-    lua_pushstring(L, WebSocketData::selfKey); // table key
     QWebSocket *ws = new QWebSocket;
-    WebSocketData *wsData = new WebSocketData(ws, 0);
-    wsData->push(L);
-    lua_rawset(L, -3); //table
-    wsData->reqInfoRef = luaL_ref(L, LUA_REGISTRYINDEX);
+    WebSocketData *wsData = new WebSocketData(ws);
+    wsData->push(L);  // table_param, ws
+
+    lua_pushvalue(L, 1);  // table_parem, ws, table_param
+    lua_setuservalue(L, -2);   // table_param, ws
+    lua_pushstring(L, WebSocketData::selfKey);  // table_param, ws, key
+    lua_pushvalue(L, -2);  // table_param, ws, key, ws
+    lua_rawset(L, 1);  // table_param, ws
 
     if (reqInfo.contains("connected"))
     {
         QObject::connect(ws, &QWebSocket::connected, [wsData, L](){
-            lua_rawgeti(L, LUA_REGISTRYINDEX, wsData->reqInfoRef);
-            lua_pushstring(L, "connected");  // t fname
-            if (lua_gettable(L, -2) == LUA_TFUNCTION)
+            LuaStackGuard stackGuard(L);
+            if (lua_checkstack(L, 4) && pushLuaUserdataCallback(L, wsData->selfRef, "connected"))
             {
-                wsData->pushFromRef(L);
-                if (lua_pcall(L, 1, 0, 0))
+                if (wsData->pushFromRef(L) && lua_pcall(L, 1, 0, 0))
                 {
                     Logger::logger()->log(Logger::Extension, "[websocket]connected: " + QString(lua_tostring(L, -1)));
                 }
             }
-            lua_pop(L, 1);
         });
     }
-    if (reqInfo.contains("disconnected"))
-    {
-        QObject::connect(ws, &QWebSocket::disconnected, [wsData, L](){
-            lua_rawgeti(L, LUA_REGISTRYINDEX, wsData->reqInfoRef);
-            lua_pushstring(L, "disconnected");  // t fname
-            if (lua_gettable(L, -2) == LUA_TFUNCTION)
+    QObject::connect(ws, &QWebSocket::disconnected, [wsData, L](){
+        LuaStackGuard stackGuard(L);
+        if (lua_checkstack(L, 4) && pushLuaUserdataCallback(L, wsData->selfRef, "disconnected"))
+        {
+            if (wsData->pushFromRef(L) && lua_pcall(L, 1, 0, 0))
             {
-                wsData->pushFromRef(L);
-                if (lua_pcall(L, 1, 0, 0))
-                {
-                    Logger::logger()->log(Logger::Extension, "[websocket]disconnected: " + QString(lua_tostring(L, -1)));
-                }
+                Logger::logger()->log(Logger::Extension, "[websocket]disconnected: " + QString(lua_tostring(L, -1)));
             }
-            lua_pop(L, 1);
-        });
-    }
+        }
+        wsData->releaseRef(L);
+    });
     if (reqInfo.contains("received"))
     {
         auto func = [wsData, L](bool isText, bool lastFrame, const QByteArray &message){
-            lua_rawgeti(L, LUA_REGISTRYINDEX, wsData->reqInfoRef);
-            lua_pushstring(L, "received");  // t fname
-            if (lua_gettable(L, -2) == LUA_TFUNCTION)
+            LuaStackGuard stackGuard(L);
+            if (lua_checkstack(L, 7) && pushLuaUserdataCallback(L, wsData->selfRef, "received"))
             {
-                wsData->pushFromRef(L);
-                lua_pushlstring(L, message.constData(), message.size());
-                lua_pushboolean(L, isText);
-                lua_pushboolean(L, lastFrame);
-                if (lua_pcall(L, 4, 0, 0))
+                if (wsData->pushFromRef(L))
                 {
-                    Logger::logger()->log(Logger::Extension, "[websocket]received: " + QString(lua_tostring(L, -1)));
+                    lua_pushlstring(L, message.constData(), message.size());
+                    lua_pushboolean(L, isText);
+                    lua_pushboolean(L, lastFrame);
+                    if (lua_pcall(L, 4, 0, 0))
+                    {
+                        Logger::logger()->log(Logger::Extension, "[websocket]received: " + QString(lua_tostring(L, -1)));
+                    }
                 }
             }
-            lua_pop(L, 1);
         };
         QObject::connect(ws, &QWebSocket::binaryMessageReceived, [=](const QByteArray &message){
             func(false, false, message);
@@ -244,39 +240,38 @@ int AppNet::websocket(lua_State *L)
     if (reqInfo.contains("pong"))
     {
         QObject::connect(ws, &QWebSocket::pong, [wsData, L](quint64 elapsedTime, const QByteArray &payload){
-            lua_rawgeti(L, LUA_REGISTRYINDEX, wsData->reqInfoRef);
-            lua_pushstring(L, "pong");  // t fname
-            if (lua_gettable(L, -2) == LUA_TFUNCTION)
+            LuaStackGuard stackGuard(L);
+            if (lua_checkstack(L, 6) && pushLuaUserdataCallback(L, wsData->selfRef, "pong"))
             {
-                wsData->pushFromRef(L);
-                lua_pushinteger(L, elapsedTime);
-                lua_pushlstring(L, payload.constData(), payload.size());
-                if (lua_pcall(L, 3, 0, 0))
+                if (wsData->pushFromRef(L))
                 {
-                    Logger::logger()->log(Logger::Extension, "[websocket]pong: " + QString(lua_tostring(L, -1)));
+                    lua_pushinteger(L, elapsedTime);
+                    lua_pushlstring(L, payload.constData(), payload.size());
+                    if (lua_pcall(L, 3, 0, 0))
+                    {
+                        Logger::logger()->log(Logger::Extension, "[websocket]pong: " + QString(lua_tostring(L, -1)));
+                    }
                 }
             }
-            lua_pop(L, 1);
         });
     }
     if (reqInfo.contains("state_changed"))
     {
         QObject::connect(ws, &QWebSocket::stateChanged, [wsData, L](QAbstractSocket::SocketState state){
-            lua_rawgeti(L, LUA_REGISTRYINDEX, wsData->reqInfoRef);
-            lua_pushstring(L, "state_changed");  // t fname
-            if (lua_gettable(L, -2) == LUA_TFUNCTION)
+            LuaStackGuard stackGuard(L);
+            if (lua_checkstack(L, 5) && pushLuaUserdataCallback(L, wsData->selfRef, "state_changed"))
             {
-                wsData->pushFromRef(L);
-                lua_pushinteger(L, static_cast<int>(state));
-                if (lua_pcall(L, 2, 0, 0))
+                if (wsData->pushFromRef(L))
                 {
-                    Logger::logger()->log(Logger::Extension, "[websocket]state_changed: " + QString(lua_tostring(L, -1)));
+                    lua_pushinteger(L, static_cast<int>(state));
+                    if (lua_pcall(L, 2, 0, 0))
+                    {
+                        Logger::logger()->log(Logger::Extension, "[websocket]state_changed: " + QString(lua_tostring(L, -1)));
+                    }
                 }
             }
-            lua_pop(L, 1);
         });
     }
-    wsData->pushFromRef(L);
     lua_pushnil(L);
     return 2;
 }
@@ -338,12 +333,22 @@ void RequestData::push(lua_State *L)
     *d = this;
 }
 
-void RequestData::pushFromRef(lua_State *L)
+bool RequestData::pushFromRef(lua_State *L)
 {
-    lua_rawgeti(L, LUA_REGISTRYINDEX, reqInfoRef);
-    lua_pushstring(L, selfKey);  // t fname
-    lua_rawget(L, -2);  // t req_data
-    lua_remove(L, -2);  // req_data
+    if (!isValidLuaRef(selfRef) || !lua_checkstack(L, 1)) return false;
+    if (lua_rawgeti(L, LUA_REGISTRYINDEX, selfRef) != LUA_TUSERDATA)
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    return true;
+}
+
+void RequestData::releaseRef(lua_State *L)
+{
+    if (!isValidLuaRef(selfRef)) return;
+    luaL_unref(L, LUA_REGISTRYINDEX, selfRef);
+    selfRef = LUA_NOREF;
 }
 
 RequestData *RequestData::checkItem(lua_State *L, int pos)
@@ -358,7 +363,8 @@ int RequestData::reqGC(lua_State *L)
     RequestData *d = checkItem(L, 1);
     if (d)
     {
-        luaL_unref(L, LUA_REGISTRYINDEX, d->reqInfoRef);
+        d->releaseRef(L);
+        *(RequestData **)lua_touserdata(L, 1) = nullptr;
         delete d;
     }
     return 0;
@@ -448,10 +454,15 @@ int RequestData::extra(lua_State *L)
         lua_pushnil(L);
         return 1;
     }
-    lua_rawgeti(L, LUA_REGISTRYINDEX, d->reqInfoRef);
-    lua_pushstring(L, "extra");  // t "extra"
-    lua_gettable(L, -2);  //
-    lua_remove(L, -2);   // extra
+    lua_getuservalue(L, 1);
+    if (!lua_istable(L, -1))
+    {
+        lua_pop(L, 1);
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_getfield(L, -1, "extra");
+    lua_remove(L, -2);
     return 1;
 }
 
@@ -487,12 +498,29 @@ void WebSocketData::push(lua_State *L)
     *d = this;
 }
 
-void WebSocketData::pushFromRef(lua_State *L)
+bool WebSocketData::pushFromRef(lua_State *L)
 {
-    lua_rawgeti(L, LUA_REGISTRYINDEX, reqInfoRef);
-    lua_pushstring(L, selfKey);  // t fname
-    lua_rawget(L, -2);  // t req_data
-    lua_remove(L, -2);  // req_data
+    if (!isValidLuaRef(selfRef) || !lua_checkstack(L, 1)) return false;
+    if (lua_rawgeti(L, LUA_REGISTRYINDEX, selfRef) != LUA_TUSERDATA)
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    return true;
+}
+
+void WebSocketData::retain(lua_State *L, int pos)
+{
+    if (isValidLuaRef(selfRef)) return;
+    lua_pushvalue(L, pos);
+    selfRef = luaL_ref(L, LUA_REGISTRYINDEX);
+}
+
+void WebSocketData::releaseRef(lua_State *L)
+{
+    if (!isValidLuaRef(selfRef)) return;
+    luaL_unref(L, LUA_REGISTRYINDEX, selfRef);
+    selfRef = LUA_NOREF;
 }
 
 WebSocketData *WebSocketData::checkItem(lua_State *L, int pos)
@@ -507,7 +535,8 @@ int WebSocketData::wsGC(lua_State *L)
     WebSocketData *d = checkItem(L, 1);
     if (d)
     {
-        luaL_unref(L, LUA_REGISTRYINDEX, d->reqInfoRef);
+        d->releaseRef(L);
+        *(WebSocketData **)lua_touserdata(L, 1) = nullptr;
         delete d;
     }
     return 0;
@@ -517,6 +546,7 @@ int WebSocketData::open(lua_State *L)
 {
     WebSocketData *d = checkItem(L, 1);
     if (!d || !d->websocket || lua_gettop(L) != 2) return 0;
+    d->retain(L, 1);
     d->websocket->open(QUrl(lua_tostring(L, 2)));
     return 0;
 }
@@ -603,10 +633,15 @@ int WebSocketData::extra(lua_State *L)
 {
     WebSocketData *d = checkItem(L, 1);
     if (!d || !d->websocket) return 0;
-    lua_rawgeti(L, LUA_REGISTRYINDEX, d->reqInfoRef);
-    lua_pushstring(L, "extra");  // t "extra"
-    lua_gettable(L, -2);  //
-    lua_remove(L, -2);   // extra
+    lua_getuservalue(L, 1);
+    if (!lua_istable(L, -1))
+    {
+        lua_pop(L, 1);
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_getfield(L, -1, "extra");
+    lua_remove(L, -2);
     return 1;
 }
 

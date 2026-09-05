@@ -14,6 +14,7 @@ class AddDanmu;
 class ElaPivot;
 class ScriptSearchOptionPanel;
 class KTagPanel;
+class TaskContext;
 struct SearchDanmuInfo
 {
     DanmuSource src;
@@ -99,7 +100,7 @@ private:
     ScriptSearchOptionPanel *scriptOptionPanel;
 
     void search();
-    int addSearchItem(QList<DanmuSource> &sources);
+    int addSearchItem(QList<DanmuSource> &sources, TaskContext *ctx = nullptr);
     void addURL();
     QWidget *setupSearchPage();
     QWidget *setupURLPage();

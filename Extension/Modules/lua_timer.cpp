@@ -1,5 +1,6 @@
 #include "lua_timer.h"
 #include "Common/logger.h"
+#include "Extension/Common/ext_common.h"
 
 namespace Extension
 {
@@ -47,7 +48,10 @@ int Timer::create(lua_State *L)
     }
     QObject::connect(d->timer, &QTimer::timeout, [=](){
         if (!d->timeoutRef) return;
+        LuaStackGuard stackGuard(L);
+        if (!lua_checkstack(L, 1)) return;
         lua_rawgeti(L, LUA_REGISTRYINDEX, d->timeoutRef);
+        if (!lua_isfunction(L, -1)) return;
         if (lua_pcall(L, 0, 0, 0))
         {
             Logger::logger()->log(Logger::Extension, "[timer.timeout]" + QString(lua_tostring(L, -1)));
@@ -66,8 +70,14 @@ int Timer::run(lua_State *L)
     const int timeout = lua_tointeger(L, 1);
     const int cb = luaL_ref(L, LUA_REGISTRYINDEX);
     QTimer::singleShot(timeout, [=](){
+        LuaStackGuard stackGuard(L);
+        if (!lua_checkstack(L, 1))
+        {
+            luaL_unref(L, LUA_REGISTRYINDEX, cb);
+            return;
+        }
         lua_rawgeti(L, LUA_REGISTRYINDEX, cb);
-        if (lua_pcall(L, 0, 0, 0))
+        if (lua_isfunction(L, -1) && lua_pcall(L, 0, 0, 0))
         {
             Logger::logger()->log(Logger::Extension, "[timer.run]" + QString(lua_tostring(L, -1)));
         }

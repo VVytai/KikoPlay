@@ -8,6 +8,72 @@
 namespace Extension
 {
 
+class LuaStackGuard
+{
+public:
+    explicit LuaStackGuard(lua_State *state) : L(state), restoreTop(state ? lua_gettop(state) : 0) {}
+    LuaStackGuard(lua_State *state, int top) : L(state), restoreTop(top) {}
+    ~LuaStackGuard()
+    {
+        if (L) lua_settop(L, restoreTop);
+    }
+
+    LuaStackGuard(const LuaStackGuard &) = delete;
+    LuaStackGuard &operator=(const LuaStackGuard &) = delete;
+
+private:
+    lua_State *L;
+    int restoreTop;
+};
+
+inline bool isValidLuaRef(int ref)
+{
+    return ref != LUA_NOREF && ref != LUA_REFNIL;
+}
+
+inline bool pushLuaTableCallback(lua_State *L, int tableRef, const char *name)
+{
+    if (!L || !isValidLuaRef(tableRef) || !lua_checkstack(L, 2)) return false;
+    if (lua_rawgeti(L, LUA_REGISTRYINDEX, tableRef) != LUA_TTABLE)
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    lua_getfield(L, -1, name);
+    lua_remove(L, -2);
+    if (!lua_isfunction(L, -1))
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    return true;
+}
+
+inline bool pushLuaUserdataCallback(lua_State *L, int userdataRef, const char *name)
+{
+    if (!L || !isValidLuaRef(userdataRef) || !lua_checkstack(L, 3)) return false;
+    if (lua_rawgeti(L, LUA_REGISTRYINDEX, userdataRef) != LUA_TUSERDATA)
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    lua_getuservalue(L, -1);
+    lua_remove(L, -2);
+    if (!lua_istable(L, -1))
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    lua_getfield(L, -1, name);
+    lua_remove(L, -2);
+    if (!lua_isfunction(L, -1))
+    {
+        lua_pop(L, 1);
+        return false;
+    }
+    return true;
+}
+
 struct AppRes
 {
     AppRes() = default;

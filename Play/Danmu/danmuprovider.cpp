@@ -47,9 +47,10 @@ ScriptState DanmuProvider::danmuSearch(const QString &scriptId, const QString &k
     if(!script || !script->supportSearch()) return "Script invalid or Unsupport search";
     ThreadTask task(GlobalObjects::workThread);
     Network::ReqAbortFlagObj *abortFlag = nullptr;
+    QObject cancelScope;
     if (ctx)
     {
-        QObject::connect(ctx, &TaskContext::cancelRequested, this, [&](){
+        QObject::connect(ctx, &TaskContext::cancelRequested, &cancelScope, [&](){
             if (abortFlag) emit abortFlag->abort();
             if (script) script->stop();
         });
@@ -70,9 +71,10 @@ ScriptState DanmuProvider::getEpInfo(const DanmuSource *source, QList<DanmuSourc
     if(!script) return "Script invalid";
     ThreadTask task(GlobalObjects::workThread);
     Network::ReqAbortFlagObj *abortFlag = nullptr;
+    QObject cancelScope;
     if (ctx)
     {
-        QObject::connect(ctx, &TaskContext::cancelRequested, this, [&](){
+        QObject::connect(ctx, &TaskContext::cancelRequested, &cancelScope, [&](){
             if (abortFlag) emit abortFlag->abort();
             if (script) script->stop();
         });
@@ -89,9 +91,10 @@ ScriptState DanmuProvider::getURLInfo(const QString &url, QList<DanmuSource> &re
     Network::ReqAbortFlagObj *abortFlag = nullptr;
     DanmuScript *_script = nullptr;
     bool cancelFlag = false;
+    QObject cancelScope;
     if (ctx)
     {
-        QObject::connect(ctx, &TaskContext::cancelRequested, this, [&](){
+        QObject::connect(ctx, &TaskContext::cancelRequested, &cancelScope, [&](){
             cancelFlag = true;
             if (abortFlag) emit abortFlag->abort();
             if (_script) _script->stop();
@@ -126,9 +129,10 @@ ScriptState DanmuProvider::downloadDanmu(const DanmuSource *item, QVector<DanmuC
     if(!script) return "Script invalid";
     ThreadTask task(GlobalObjects::workThread);
     Network::ReqAbortFlagObj *abortFlag = nullptr;
+    QObject cancelScope;
     if (ctx)
     {
-        QObject::connect(ctx, &TaskContext::cancelRequested, this, [&](){
+        QObject::connect(ctx, &TaskContext::cancelRequested, &cancelScope, [&](){
             if (abortFlag) emit abortFlag->abort();
             if (script) script->stop();
         });

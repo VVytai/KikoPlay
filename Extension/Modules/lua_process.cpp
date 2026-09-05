@@ -55,22 +55,19 @@ int Process::create(lua_State *L)
     *p = d;
     QObject::connect((*p)->p, &QProcess::started, [=](){
         if (!d->eventCbRef) return;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, d->eventCbRef);
-        lua_pushstring(L, "start");  // t fname
-        if (lua_gettable(L, -2) == LUA_TFUNCTION)
+        LuaStackGuard stackGuard(L);
+        if (pushLuaTableCallback(L, d->eventCbRef, "start"))
         {
             if (lua_pcall(L, 0, 0, 0))
             {
                 Logger::logger()->log(Logger::Extension, "[process]" + QString(lua_tostring(L, -1)));
             }
         }
-        lua_pop(L, 1);
     });
     QObject::connect((*p)->p, &QProcess::errorOccurred, [=](QProcess::ProcessError err){
         if (!d->eventCbRef) return;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, d->eventCbRef);
-        lua_pushstring(L, "error");  // t fname
-        if (lua_gettable(L, -2) == LUA_TFUNCTION)
+        LuaStackGuard stackGuard(L);
+        if (lua_checkstack(L, 3) && pushLuaTableCallback(L, d->eventCbRef, "error"))
         {
             lua_pushinteger(L, static_cast<int>(err));
             if (lua_pcall(L, 1, 0, 0))
@@ -78,13 +75,11 @@ int Process::create(lua_State *L)
                 Logger::logger()->log(Logger::Extension, "[process]" + QString(lua_tostring(L, -1)));
             }
         }
-        lua_pop(L, 1);
     });
     QObject::connect((*p)->p, (void (QProcess:: *)(int, QProcess::ExitStatus))&QProcess::finished, [=](int exitCode, QProcess::ExitStatus exitStatus){
         if (!d->eventCbRef) return;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, d->eventCbRef);
-        lua_pushstring(L, "finished");  // t fname
-        if (lua_gettable(L, -2) == LUA_TFUNCTION)
+        LuaStackGuard stackGuard(L);
+        if (lua_checkstack(L, 4) && pushLuaTableCallback(L, d->eventCbRef, "finished"))
         {
             lua_pushinteger(L, exitCode);
             lua_pushinteger(L, static_cast<int>(exitStatus));
@@ -93,13 +88,11 @@ int Process::create(lua_State *L)
                 Logger::logger()->log(Logger::Extension, "[process]" + QString(lua_tostring(L, -1)));
             }
         }
-        lua_pop(L, 1);
     });
     QObject::connect((*p)->p, &QProcess::readyReadStandardOutput, [=](){
         if (!d->eventCbRef) return;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, d->eventCbRef);
-        lua_pushstring(L, "readready");  // t fname
-        if (lua_gettable(L, -2) == LUA_TFUNCTION)
+        LuaStackGuard stackGuard(L);
+        if (lua_checkstack(L, 3) && pushLuaTableCallback(L, d->eventCbRef, "readready"))
         {
             lua_pushinteger(L, 0);
             if (lua_pcall(L, 1, 0, 0))
@@ -107,13 +100,11 @@ int Process::create(lua_State *L)
                 Logger::logger()->log(Logger::Extension, "[process]" + QString(lua_tostring(L, -1)));
             }
         }
-        lua_pop(L, 1);
     });
     QObject::connect((*p)->p, &QProcess::readyReadStandardError, [=](){
         if (!d->eventCbRef) return;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, d->eventCbRef);
-        lua_pushstring(L, "readready");  // t fname
-        if (lua_gettable(L, -2) == LUA_TFUNCTION)
+        LuaStackGuard stackGuard(L);
+        if (lua_checkstack(L, 3) && pushLuaTableCallback(L, d->eventCbRef, "readready"))
         {
             lua_pushinteger(L, 1);
             if (lua_pcall(L, 1, 0, 0))
@@ -121,7 +112,6 @@ int Process::create(lua_State *L)
                 Logger::logger()->log(Logger::Extension, "[process]" + QString(lua_tostring(L, -1)));
             }
         }
-        lua_pop(L, 1);
     });
     return 1;
 }

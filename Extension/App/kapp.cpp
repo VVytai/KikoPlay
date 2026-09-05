@@ -191,6 +191,7 @@ void KApp::stop()
     if (window) window->deleteLater();
     if (L)
     {
+        lua_settop(L, 0);
         lua_close(L);
         L = nullptr;
     }
@@ -228,6 +229,8 @@ void KApp::eventCall(const QString &func, const QVariant &param)
     {
         return;
     }
+    LuaStackGuard stackGuard(L);
+    if (!lua_checkstack(L, 4)) return;
     bool isRef = false;
     const int ref = func.toInt(&isRef);
     if (isRef)
@@ -267,7 +270,7 @@ void KApp::eventCall(const QString &func, const QVariant &param)
             lua_pop(L, 2);
             return;
         }
-        lua_remove(L, 1);  //func
+        lua_remove(L, -2);  //func
     }
     if (param.isValid())
     {
@@ -287,6 +290,11 @@ void KApp::eventCall(const QString &func, int paramCount)
     {
         return;
     }
+    const int entryTop = lua_gettop(L);
+    if (paramCount < 0 || entryTop < paramCount) return;
+    const int baseTop = entryTop - paramCount;
+    LuaStackGuard stackGuard(L, baseTop);
+    if (!lua_checkstack(L, 3)) return;
     bool isRef = false;
     const int ref = func.toInt(&isRef);
     if (isRef)
@@ -328,7 +336,7 @@ void KApp::eventCall(const QString &func, int paramCount)
         }
         lua_remove(L, -2);  // <params> func
     }
-    lua_insert(L, 1);  // func <params>
+    lua_insert(L, baseTop + 1);  // func <params>
     if(lua_pcall(L,  paramCount, 0, 0))
     {
         Logger::logger()->log(Logger::Extension, QString("[eventCall]error: %1").arg(lua_tostring(L, -1)));
@@ -341,6 +349,12 @@ QVariantList KApp::funcCall(const QString &func, const QVariantList &params, int
     if (!L)
     {
         errInfo = "Wrong Lua State";
+        return QVariantList();
+    }
+    LuaStackGuard stackGuard(L);
+    if (!lua_checkstack(L, params.size() + nRet + 2))
+    {
+        errInfo = "Lua stack overflow";
         return QVariantList();
     }
     if (lua_getglobal(L, appTable) != LUA_TTABLE)
@@ -381,6 +395,7 @@ QVariantList KApp::funcCall(const QString &func, const QVariantList &params, int
 bool KApp::hasFunc(const QByteArrayList &tnames)
 {
     if (!L || tnames.empty()) return false;
+    LuaStackGuard stackGuard(L);
     int lastType = -1, i = 1;
     lastType = lua_getglobal(L, tnames[0].constData());
     for (; i < tnames.size(); ++i)

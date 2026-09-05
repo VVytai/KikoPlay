@@ -11,7 +11,7 @@ namespace  Extension
 {
 struct RequestData
 {
-    RequestData(QNetworkReply *r, int ref) : reply(r), reqInfoRef(ref) {}
+    explicit RequestData(QNetworkReply *r) : reply(r) {}
     ~RequestData()
     {
         if (reply)
@@ -23,10 +23,11 @@ struct RequestData
     RequestData &operator=(const RequestData&) = delete;
     RequestData(const RequestData&) = delete;
     QNetworkReply *reply = nullptr;
-    int reqInfoRef = 0;
+    int selfRef = LUA_NOREF;
 
     void push(lua_State *L);
-    void pushFromRef(lua_State *L);
+    bool pushFromRef(lua_State *L);
+    void releaseRef(lua_State *L);
 
     static const char *MetaName;
     static const char *selfKey;
@@ -46,7 +47,7 @@ struct RequestData
 
 struct WebSocketData
 {
-    WebSocketData(QWebSocket *s, int ref) : websocket(s), reqInfoRef(ref) {}
+    explicit WebSocketData(QWebSocket *s) : websocket(s) {}
     ~WebSocketData()
     {
         if (websocket)
@@ -59,10 +60,12 @@ struct WebSocketData
     WebSocketData(const WebSocketData&) = delete;
 
     QWebSocket *websocket = nullptr;
-    int reqInfoRef = 0;
+    int selfRef = LUA_NOREF;
 
     void push(lua_State *L);
-    void pushFromRef(lua_State *L);
+    bool pushFromRef(lua_State *L);
+    void retain(lua_State *L, int pos);
+    void releaseRef(lua_State *L);
 
     static const char *MetaName;
     static const char *selfKey;

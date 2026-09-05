@@ -48,6 +48,7 @@ ScriptBase::~ScriptBase()
     if(L)
     {
         QMutexLocker locker(&scriptLock);
+        lua_settop(L, 0);
         lua_close(L);
         L = nullptr;
     }
@@ -186,6 +187,13 @@ QVariantList ScriptBase::call(const char *fname, const QVariantList &params, int
     {
         errInfo = "Wrong Lua State";
         LOG_ERROR(errInfo, "Lua");
+        return QVariantList();
+    }
+    Extension::LuaStackGuard stackGuard(L);
+    if (!lua_checkstack(L, params.size() + nRet + 1))
+    {
+        errInfo = "Lua stack overflow";
+        LOG_ERROR(errInfo, id());
         return QVariantList();
     }
     if(lua_getglobal(L, fname) != LUA_TFUNCTION)
@@ -516,6 +524,7 @@ void ScriptBase::loadScriptMenus()
 void ScriptBase::registerFuncs(const char *tname, const luaL_Reg *funcs)
 {
     if(!L) return;
+    Extension::LuaStackGuard stackGuard(L);
     lua_getglobal(L, tname);
     if (lua_isnil(L, -1)) {
       lua_pop(L, 1);
@@ -527,6 +536,7 @@ void ScriptBase::registerFuncs(const char *tname, const luaL_Reg *funcs)
 
 ScriptState ScriptBase::loadScriptStr(const QString &content)
 {
+    Extension::LuaStackGuard stackGuard(L);
     QString errInfo;
     if(luaL_loadstring(L, content.toStdString().c_str()) || lua_pcall(L,0,0,0))
     {

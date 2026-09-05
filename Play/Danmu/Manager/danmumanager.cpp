@@ -652,9 +652,10 @@ void DanmuManager::updatePool(QList<DanmuPoolNode *> &updateList, TaskContext *c
     ThreadTask task(GlobalObjects::workThread);
     bool cancelFlag = false;
     bool skipInvalidSrc = false;
+    QObject cancelScope;
     if (ctx)
     {
-        QObject::connect(ctx, &TaskContext::cancelRequested, this, [&](){
+        QObject::connect(ctx, &TaskContext::cancelRequested, &cancelScope, [&](){
             cancelFlag = true;
         });
         skipInvalidSrc = ctx->env.value("skip_invalid_src", false).toBool();

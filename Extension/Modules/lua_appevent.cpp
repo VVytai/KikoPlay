@@ -73,7 +73,8 @@ int AppEventBusEvent::listen(lua_State *L)
     r = new EventListenerRes(new EventListener(EventBus::getEventBus(), event, [app, cbRef](const EventParam *p){
         lua_State *L = app->getState();
         if (!L) return;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef);
+        LuaStackGuard stackGuard(L);
+        if (!lua_checkstack(L, 2)) return;
         if (lua_rawgeti(L, LUA_REGISTRYINDEX, cbRef) == LUA_TFUNCTION)
         {
             pushValue(L, p->param);
@@ -82,7 +83,6 @@ int AppEventBusEvent::listen(lua_State *L)
                 Logger::logger()->log(Logger::Extension, QString("[%1][event_%2]%3").arg(app->id()).arg(p->eventType).arg(QString(lua_tostring(L, -1))));
             }
         }
-        lua_pop(L, 1);
     }), cbRef);
     app->addRes(resKey, r);
     return 0;

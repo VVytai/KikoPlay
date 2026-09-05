@@ -12,6 +12,7 @@ ModuleBase::ModuleBase(lua_State *state) : L(state)
 void ModuleBase::registerFuncs(const char *tname, const luaL_Reg *funcs)
 {
     if(!L) return;
+    LuaStackGuard stackGuard(L);
     lua_getglobal(L, tname);
     if (lua_isnil(L, -1)) {
       lua_pop(L, 1);
@@ -24,6 +25,7 @@ void ModuleBase::registerFuncs(const char *tname, const luaL_Reg *funcs)
 void ModuleBase::registerFuncs(const QByteArrayList &tnames, const luaL_Reg *funcs)
 {
     if (!L || tnames.empty()) return;
+    LuaStackGuard stackGuard(L);
     lua_getglobal(L, tnames[0].constData());
     if (lua_isnil(L, -1))
     {
@@ -39,9 +41,9 @@ void ModuleBase::registerFuncs(const QByteArrayList &tnames, const luaL_Reg *fun
             lua_pop(L, 1);
             lua_newtable(L);  //  t  t_i
             lua_pushvalue(L, -1);   // t  t_i  t_i
-            lua_setfield(L, 1, tnames[i].constData());   // t  t_i
+            lua_setfield(L, -3, tnames[i].constData());   // t  t_i
         }
-        lua_remove(L, 1);  // t_i
+        lua_remove(L, -2);  // t_i
     }
     luaL_setfuncs(L, funcs, 0);
     lua_pop(L, 1);
@@ -50,6 +52,7 @@ void ModuleBase::registerFuncs(const QByteArrayList &tnames, const luaL_Reg *fun
 void ModuleBase::addDataMembers(const QByteArrayList &tnames, const QVector<QPair<QString, QVariant> > members)
 {
     if (!L || tnames.empty()) return;
+    LuaStackGuard stackGuard(L);
     lua_getglobal(L, tnames[0].constData());
     if (lua_isnil(L, -1))
     {
@@ -65,9 +68,9 @@ void ModuleBase::addDataMembers(const QByteArrayList &tnames, const QVector<QPai
             lua_pop(L, 1);
             lua_newtable(L);  //  t  t_i
             lua_pushvalue(L, -1);   // t  t_i  t_i
-            lua_setfield(L, 1, tnames[i].constData());   // t  t_i
+            lua_setfield(L, -3, tnames[i].constData());   // t  t_i
         }
-        lua_remove(L, 1);  // t_i
+        lua_remove(L, -2);  // t_i
     }
     for (const auto &p : members)
     {
@@ -81,6 +84,7 @@ void ModuleBase::addDataMembers(const QByteArrayList &tnames, const QVector<QPai
 void ModuleBase::registerMemberFuncs(const char *metaName, const luaL_Reg *funcs)
 {
     if(!L) return;
+    LuaStackGuard stackGuard(L);
     luaL_newmetatable(L, metaName);
     lua_pushstring(L, "__index");
     lua_pushvalue(L, -2); // pushes the metatable
