@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QFontDatabase>
 #include <QElapsedTimer>
+#include <QPointer>
 #include "Extension/Common/ext_common.h"
 #include "Extension/Modules/lua_apputil.h"
 #include "Extension/Modules/lua_browser.h"
@@ -38,13 +39,6 @@
 namespace Extension
 {
 const char *KApp::globalAppObj = "kiko_app";
-
-struct FontRes : public AppRes
-{
-    FontRes(int id) : fontId(id) {}
-    ~FontRes() { QFontDatabase::removeApplicationFont(fontId); }
-    int fontId;
-};
 
 KApp *KApp::create(const QString &path)
 {
@@ -118,6 +112,9 @@ bool KApp::start(LaunchScene scene)
     //  start app ----------------
     appThread = new QThread;
     appThread->setObjectName("kapp/" + id());
+    QObject::connect(appThread, &QThread::finished, this, [this]() {
+        cleanupRuntime();
+    }, Qt::DirectConnection);
     appThread->start();
     QObject tmp;
     tmp.moveToThread(appThread);
@@ -128,12 +125,14 @@ bool KApp::start(LaunchScene scene)
     if (!errInfo.isEmpty())
     {
         Logger::logger()->log(Logger::Extension, QString("[%1]app start error: %2").arg(id(), errInfo));
+        stop();
         return false;
     }
     AppWidget *w = AppWidget::parseFromXmlFile(path() + "/app.xml", this, "window", &errInfo);
     if (!w)
     {
         Logger::logger()->log(Logger::Extension, QString("[%1]xml error: %2").arg(id(), errInfo));
+        stop();
         return false;
     }
     w->moveToThread(appThread);
@@ -166,7 +165,7 @@ bool KApp::start(LaunchScene scene)
 
 void KApp::close()
 {
-    if (!loaded || !mainWindow || !mainWindow->getWidget()) return;
+    if (!loaded || stopping.load() || !mainWindow || !mainWindow->getWidget()) return;
     AppFramelessDialog *w = static_cast<AppFramelessDialog *>(mainWindow->getWidget());
     w->reject();
     stop();
@@ -174,42 +173,54 @@ void KApp::close()
 
 void KApp::stop()
 {
-    if (!loaded) return;
+    if (stopping.exchange(true)) return;
+    const bool notifyClose = loaded;
+    if (!loaded && !appThread && !L && appResources.isEmpty() && appFontIds.isEmpty())
+    {
+        stopping.store(false);
+        return;
+    }
+    QPointer<QWidget> window = mainWindow ? mainWindow->getWidget() : nullptr;
     if (L)
     {
         lua_sethook(L, exitHook, LUA_MASKCOUNT, 1);
     }
-    QWidget *window = mainWindow->getWidget();
-    qDeleteAll(appResources);
     if (appThread)
     {
         QEventLoop eventLoop;
-        QObject::connect(appThread, &QThread::finished, &eventLoop, &QEventLoop::quit);
-        appThread->quit();
-        eventLoop.exec();
+        QObject::connect(appThread, &QThread::finished, &eventLoop, &QEventLoop::quit,
+                         Qt::QueuedConnection);
+        if (appThread->isRunning())
+        {
+            appThread->quit();
+            if (appThread->isRunning()) eventLoop.exec();
+        }
+        appThread->wait();
+    }
+    else
+    {
+        cleanupRuntime();
     }
     if (window) window->deleteLater();
-    if (L)
+    for (int fontId : appFontIds)
     {
-        lua_settop(L, 0);
-        lua_close(L);
-        L = nullptr;
+        QFontDatabase::removeApplicationFont(fontId);
     }
+    appFontIds.clear();
     if (appThread)
     {
         appThread->deleteLater();
         appThread = nullptr;
     }
-    appResources.clear();
-    resHash.clear();
     mainWindow = nullptr;
     loaded = false;
-    emit appClose(this);
+    stopping.store(false);
+    if (notifyClose) emit appClose(this);
 }
 
 void KApp::show()
 {
-    if (!loaded || !mainWindow) return;
+    if (!loaded || stopping.load() || !mainWindow) return;
     AppFramelessDialog *w = static_cast<AppFramelessDialog *>(mainWindow->getWidget());
     QMetaObject::invokeMethod(w, [w](){
         w->show();
@@ -464,7 +475,7 @@ void KApp::removeRes(const QString &key)
     delete r;
 }
 
-KApp::KApp() : QObject(nullptr), loaded(false), appThread(nullptr), L(nullptr), mainWindow(nullptr)
+KApp::KApp() : QObject(nullptr), loaded(false), stopping(false), appThread(nullptr), L(nullptr), mainWindow(nullptr)
 {
 
 }
@@ -635,12 +646,30 @@ bool KApp::getTable(const QStringList &tnames)
     return true;
 }
 
-void KApp::exitHook(lua_State *L, lua_Debug *ar)
+void KApp::exitHook(lua_State *L, lua_Debug *)
 {
-    //lua_sethook(L, nullptr, 0, 0);
-    KApp *app = KApp::getApp(L);
-    Logger::logger()->log(Logger::Extension, QString("terminate: %1").arg(app? app->id() : "[unknown]"));
     luaL_error(L, "app terminate");
+}
+
+void KApp::cleanupRuntime()
+{
+    Q_ASSERT(!appThread || QThread::currentThread() == appThread);
+
+    if (L)
+    {
+        lua_sethook(L, nullptr, 0, 0);
+    }
+
+    qDeleteAll(appResources);
+    appResources.clear();
+    resHash.clear();
+
+    if (L)
+    {
+        lua_settop(L, 0);
+        lua_close(L);
+        L = nullptr;
+    }
 }
 
 void KApp::setAppWindowEvent()
@@ -694,7 +723,7 @@ void KApp::loadFont()
     {
         const QString path = this->path() + "/" + f;
         int fontId = QFontDatabase::addApplicationFont(path);
-        this->appResources.append(new FontRes(fontId));
+        this->appFontIds.append(fontId);
         loadedFontFamilies += QFontDatabase::applicationFontFamilies(fontId);
     }
     lua_getglobal(L, envTable);

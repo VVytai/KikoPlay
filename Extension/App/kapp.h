@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QThread>
 #include <QIcon>
+#include <atomic>
 
 namespace Extension
 {
@@ -79,12 +80,15 @@ private:
     const char *envTable = "env";
 
     static void exitHook(lua_State *L, lua_Debug *ar);
+    void cleanupRuntime();
 
     bool loaded;
+    std::atomic_bool stopping;
     QThread *appThread;
     lua_State *L;
     AppWidget *mainWindow;
     QVector<AppRes *> appResources;
+    QVector<int> appFontIds;
     QHash<QString, QVariant> appInfo;
     QHash<QString, AppRes *> resHash;
     QPixmap appIcon;
